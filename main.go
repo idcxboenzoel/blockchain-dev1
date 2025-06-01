@@ -21,7 +21,7 @@ import (
 const (
 	apiKeyHeader   = "X-API-Key"
 	requiredAPIKey = "your-secure-api-key" // Change to your secret key, store safely
-	listenAddr     = "0.0.0.0:8443"
+	listenAddr     = ":8443"
 	certFile       = "server.crt" // TLS certificate
 	keyFile        = "server.key" // TLS private key
 )
@@ -67,13 +67,13 @@ func main() {
 	}).Handler(mux)
 
 	server := &http.Server{
-		Addr:         listenAddr,
+		Addr:         "0.0.0.0" + listenAddr,
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 20 * time.Second,
 	}
 
-	log.Printf("Starting secure blockchain server on https://localhost%s\n", listenAddr)
+	log.Printf("Starting secure blockchain server on https://%s\n", listenAddr)
 	err = server.ListenAndServeTLS(certFile, keyFile)
 	if err != nil {
 		log.Fatal("Server failed:", err)
