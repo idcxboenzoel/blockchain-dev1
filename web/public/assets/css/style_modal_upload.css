@@ -1,0 +1,291 @@
+.modal_upload {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* gap: 16px; */
+  padding: 16px 32px 24px;
+  position: relative;
+  background-color: #ffffff;
+  width:597px;
+  border-radius: 8px;
+  /* height:348px; */
+}
+
+.modal_upload .header-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0px 0px 8px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  background-color: transparent;
+  border-top-style: none;
+  border-right-style: none;
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-left-style: none;
+  border-color: var(--x-40);
+}
+
+.modal_upload .icon-and-text {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 8px 114px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+.modal_upload .editorial {
+  position: relative;
+  width: 42px;
+  height: 40px;
+  object-fit: cover;
+}
+
+.modal_upload .text-wrapper {
+  position: relative;
+  width: fit-content;
+  font-family: var(--heading-XXS-font-family);
+  font-weight: var(--heading-XXS-font-weight);
+  color: #212121;
+  font-size: var(--heading-XXS-font-size);
+  letter-spacing: var(--heading-XXS-letter-spacing);
+  line-height: var(--heading-XXS-line-height);
+  white-space: nowrap;
+  font-style: var(--heading-XXS-font-style);
+}
+
+.modal_upload .close {
+  display: flex;
+  width: 533px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 10px;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.modal_upload .frame {
+  position: relative;
+  width: 20px;
+  height: 20px;
+}
+
+.modal_upload .ITEMS {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* gap: 24px; */
+  padding: 8px 10px;
+  position: relative;
+  align-self: stretch;
+  width: 100%;
+  flex: 0 0 auto;
+  margin-top:10px;
+}
+
+.modal_upload .ITEMS .div {
+  /* Here are the details of your current batch upload: */
+
+  width: 513px;
+  height: 22px;
+
+  /* Body - SM */
+  font-family: 'Open Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 22px;
+  /* identical to box height, or 157% */
+  text-align: center;
+  letter-spacing: 0.02em;
+
+  /* Black 600 */
+  color: #757575;
+
+
+  /* Inside auto layout */
+  flex: none;
+  order: 0;
+  align-self: stretch;
+  flex-grow: 0;
+  margin-bottom:24px;
+}
+
+.modal_upload .div {
+  position: relative;
+  align-self: stretch;
+  margin-top: -1px;
+  font-family: var(--body-SM-font-family);
+  font-weight: var(--body-SM-font-weight);
+  color: #757575;
+  font-size: var(--body-SM-font-size);
+  text-align: center;
+  letter-spacing: var(--body-SM-letter-spacing);
+  line-height: var(--body-SM-line-height);
+  font-style: var(--body-SM-font-style);
+}
+
+.modal_upload .details .p {
+  /* 80 employee records have been imported succesfully */
+
+  width: 434px;
+  height: 16px;
+
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 16px;
+  /* identical to box height, or 100% */
+
+  /* Green 600 */
+  color: #00897B;
+
+
+  /* Inside auto layout */
+  flex: none;
+  order: 0;
+  flex-grow: 0;
+
+}
+
+.modal_upload .details .text-wrapper-2{
+  /* 20 employee records were not imported due to errors */
+
+  width: 430px;
+  height: 16px;
+
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 16px;
+  /* identical to box height, or 100% */
+
+  /* Red 800 */
+  color: #C62828;
+
+
+  /* Inside auto layout */
+  flex: none;
+  order: 1;
+  flex-grow: 0;
+
+}
+
+.modal_upload .details {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  /* gap: 12px; */
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.modal_upload .p {
+  margin-top: -1px;
+  color: var(--green-600);
+  position: relative;
+  width: fit-content;
+  font-family: "Poppins-Medium", Helvetica;
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.modal_upload .text-wrapper-2 {
+  color: var(--red-800);
+  position: relative;
+  width: fit-content;
+  font-family: "Poppins-Medium", Helvetica;
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.modal_upload .you-can-check-on {
+  position: relative;
+  align-self: stretch;
+  font-family: "Open Sans-Regular", Helvetica;
+  font-weight: 400;
+  color: var(--black-600);
+  font-size: 14px;
+  text-align: center;
+  letter-spacing: 0.28px;
+  line-height: 22px;
+}
+
+.modal_upload .span {
+  letter-spacing: var(--body-SM-letter-spacing);
+  font-family: var(--body-SM-font-family);
+  font-style: var(--body-SM-font-style);
+  font-weight: var(--body-SM-font-weight);
+  line-height: var(--body-SM-line-height);
+  font-size: var(--body-SM-font-size);
+}
+
+.modal_upload .text-wrapper-3 {
+  font-family: "Open Sans-SemiBold", Helvetica;
+  font-weight: 600;
+  letter-spacing: 0.04px;
+}
+
+.modal_upload .text-wrapper-4 {
+  letter-spacing: 0.04px;
+}
+
+.modal_upload .BUTTONS {
+  display: flex;
+  width: 400px;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 12px 24px;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.modal_upload .normal {
+  display: flex;
+  width: 120px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 32px;
+  position: relative;
+  background-color: var(--black-900);
+  border-radius: 4px;
+  box-shadow: 0px 6px 20px #c3c4c499;
+}
+
+.modal_upload .ok {
+  position: relative;
+  flex: 1;
+  margin-top: -2px;
+  font-family: var(--button-flat-font-family);
+  font-weight: var(--button-flat-font-weight);
+  color: var(--mms-white);
+  font-size: var(--button-flat-font-size);
+  text-align: center;
+  letter-spacing: var(--button-flat-letter-spacing);
+  line-height: var(--button-flat-line-height);
+  font-style: var(--button-flat-font-style);
+  cursor:pointer;
+}
+
+

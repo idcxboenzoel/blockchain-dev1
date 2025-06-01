@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Go Web3 Blockchain</title>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Google Fonts: Roboto -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+</head>
+
+<style>
+    td.timestamp-data {
+        font-size: 0.92em;
+        color: #6c757d;
+        text-align:left;
+        vertical-align: middle;
+    }
+    td {
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    th {
+        text-align: center;
+        font-weight: bold;
+    }
+
+    th.timestamp-header {
+        text-align: left;
+    }
+</style>
+<body>
+    <h1>Simple Go Blockchain</h1>
+    <button onclick="getBlocks()">Get Blocks</button>
+    <div id="output"></div>
+
+    <script>
+        async function getBlocks() {
+            const res = await fetch('https://localhost:8443/blocks', {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': 'your-secure-api-key'
+                }
+            });
+            const blocks = await res.json();
+            if (!Array.isArray(blocks) || blocks.length === 0) {
+                document.getElementById("output").innerText = "No blocks found.";
+                return;
+            }
+
+            // Build table headers from block keys
+            const headers = Object.keys(blocks[0]);
+            let table = '<div style="overflow-x:auto;"><table border="1" cellpadding="5" class="table table-striped table-hover table-sm" style="font-size:0.92rem; min-width:700px;">';
+            table += '<thead><tr>';
+            headers.forEach(h => {
+                if (h === "Timestamp") {
+                    table += `<th class="timestamp-header" style="font-size:0.95em;">${h}</th>`;
+                } else {
+                    table += `<th style="font-size:0.95em;">${h}</th>`;
+                }
+            });
+            table += '</tr></thead><tbody>';
+
+            // Build table rows
+            blocks.forEach(block => {
+                table += '<tr style="text-align:center;cursor:pointer;" onclick="getBlockByIndex(' + block.Index + ')">';
+                headers.forEach(h => {
+                    if (h === "Timestamp") {
+                        table += `<td class="timestamp-data" style="font-size:0.92em;">${block[h]}</td>`;
+                    } else if (h === "Transactions" && Array.isArray(block[h])) {
+                        
+                        table += `<td  class="transactions-data" style="font-size:0.91em;">${block[h].length}</td>`;
+                    } else if (h === "PrevHash" || h === "Hash") {
+                        const shortVal = block[h] && block[h] !== null && block[h] !== "" && block[h].length > 10 ? block[h].slice(0, 10) + "..." : block[h];
+                        var block_n = `${shortVal}`;
+                        table += `<td class="hash-data" title="${block[h]}" style="font-size:0.92em;">${block_n}</td>`;
+                    }else if(h === "Index") {
+                        table += `<td class="other-data" style="font-size:0.92em;"><strong>#BLOCK${block[h]}</strong></td>`;
+                    }else {
+                        table += `<td class="other-data" style="font-size:0.92em;">${block[h]}</td>`;
+                    }
+                });
+                table += '</tr>';
+            });
+            table += '</tbody></table></div>';
+
+            document.getElementById("output").innerHTML = table;
+        }
+
+        async function getBlockByIndex(Index) {
+            const res = await fetch(`https://localhost:8443/block/index?index=${Index}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': 'your-secure-api-key'
+                },
+            });
+            const blocks = [];
+            blocks.push(await res.json());
+            if (!Array.isArray(blocks) || blocks.length === 0) {
+                document.getElementById("output").innerText = "No blocks found.";
+                return;
+            }
+
+            // Build table headers from block keys
+            const headers = Object.keys(blocks[0]);
+            let table = '<div style="overflow-x:auto;"><table border="1" cellpadding="5" class="table table-striped table-hover table-sm" style="font-size:0.92rem; min-width:700px;">';
+            table += '<thead><tr>';
+            headers.forEach(h => {
+                if (h === "Timestamp") {
+                    table += `<th class="timestamp-header" style="font-size:0.95em;">${h}</th>`;
+                } else {
+                    table += `<th style="font-size:0.95em;">${h}</th>`;
+                }
+            });
+
+            // Build table rows
+            blocks.forEach(block => {
+                table += '<tr>';
+                headers.forEach(h => {
+                    if (h === "Timestamp") {
+                        table += `<td class="timestamp-data" style="font-size:0.92em;">${block[h]}</td>`;
+                    } else if (h === "Transactions" && Array.isArray(block[h])) {
+                        let txList = '<ul style="padding-left:1.2em; font-size:0.91em;">';
+                        block[h].forEach(tx => {
+                            if (typeof tx === "object" && tx !== null) {
+                                txList += '<li>';
+                                for (const [key, value] of Object.entries(tx)) {
+                                    if(key === "PubKey" || key === "Signature" || key === "ID") {
+                                        continue;
+                                    } else if (key === "Sender" && (value === null || value === "")) {
+                                        txList += `<strong>${key}:</strong> creator block<br>`;
+                                    } else if (value !== null && value !== "") {
+                                        txList += `<strong>${key}:</strong> ${value}<br>`;
+                                    }  else {
+                                        txList += `<strong>${key}:</strong> <em>not provided</em><br>`;
+                                    }
+                                }
+                                txList += '</li>';
+                            } else {
+                                txList += `<li>${tx}</li>`;
+                            }
+                        });
+                        txList += '</ul>';
+                        table += `<td class="transactions-data" style="font-size:0.91em;">${txList}</td>`;
+                    } else if (h === "PrevHash" || h === "Hash") {
+                        const shortVal = block[h] && block[h] !== null && block[h] !== "" && block[h].length > 10 ? block[h].slice(0, 10) + "..." : block[h];
+                        var block_n = `${shortVal}`;
+                        table += `<td class="hash-data" title="${block[h]}" style="font-size:0.92em;">${block_n}</td>`;
+                    }else if(h === "Index") {
+                        table += `<td class="other-data" style="font-size:0.92em;"><strong>#BLOCK${block[h]}</strong></td>`;
+                    }else {
+                        table += `<td class="other-data" style="font-size:0.92em;">${block[h]}</td>`;
+                    }
+                });
+                table += '</tr>';
+            });
+            table += '</tbody></table></div>';
+
+            document.getElementById("output").innerHTML = table;
+        }
+    </script>
+</body>
+</html>
