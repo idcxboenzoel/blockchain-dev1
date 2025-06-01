@@ -73,11 +73,17 @@ func main() {
 		WriteTimeout: 20 * time.Second,
 	}
 
-	log.Printf("Starting secure blockchain server on https://%s\n", listenAddr)
-	err = server.ListenAndServeTLS(certFile, keyFile)
+	log.Printf("Starting blockchain server on http://%s\n", listenAddr)
+	err = server.ListenAndServe()
 	if err != nil {
 		log.Fatal("Server failed:", err)
 	}
+
+	// log.Printf("Starting secure blockchain server on http://%s\n", listenAddr)
+	// err = server.ListenAndServeTLS(certFile, keyFile)
+	// if err != nil {
+	// 	log.Fatal("Server failed:", err)
+	// }
 }
 
 // Middleware to check API key in header for every request
