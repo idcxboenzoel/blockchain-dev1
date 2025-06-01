@@ -12,6 +12,6 @@ func main() {
 		c.HTML(200, "index.html", nil)
 	})
 
-	r.Run(":9191") // serve on localhost:8080
+	r.Run("0.0.0.0:80") // serve on localhost:8080
 
 }
