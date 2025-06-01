@@ -21,7 +21,7 @@ import (
 const (
 	apiKeyHeader   = "X-API-Key"
 	requiredAPIKey = "your-secure-api-key" // Change to your secret key, store safely
-	listenAddr     = ":8443"
+	listenAddr     = "0.0.0.0:8443"
 	certFile       = "server.crt" // TLS certificate
 	keyFile        = "server.key" // TLS private key
 )
