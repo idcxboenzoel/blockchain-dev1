@@ -13,9 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/rs/cors"
@@ -87,7 +85,7 @@ func main() {
 		AllowCredentials: true,
 	}).Handler(mux)
 
-	port := "8181"
+	port := "9292"
 
 	server := &http.Server{
 		Addr:         listenAddr + ":" + port,
@@ -109,27 +107,17 @@ func main() {
 }
 
 func initBroadcast() (*broadcast.BroadcastService, error) {
-	// Initialize broadcast service
 	handler := &NodeHandler{}
 	bs := broadcast.NewBroadcastService(handler)
 
-	port := "9191"
-	if err := bs.Start(port); err != nil {
-		fmt.Printf("Failed to start broadcast service: %v\n", err)
-		return nil, err
-	}
-	fmt.Printf("Node running on port %s\n", port)
+	port := "9999"
+	go func() {
+		if err := bs.Start(port); err != nil {
+			fmt.Printf("Broadcast service error: %v\n", err)
+		}
+	}()
 
-	// Wait for termination signal (Ctrl+C or SIGTERM)
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
-
-	fmt.Println("\nShutting down...")
-	bs.Stop()
-	fmt.Println("Node stopped.")
-	//
-
+	fmt.Printf("Broadcast service started on port %s\n", port)
 	return bs, nil
 }
 
@@ -224,12 +212,19 @@ func HandleAddTx(w http.ResponseWriter, r *http.Request, broadcastService *broad
 		blockchain.Mempool = append(blockchain.Mempool, tx)
 		blockchain.SaveMempool(blockchain.Mempool)
 
+		txMsg := struct {
+			Tx types.Transaction `json:"tx"`
+		}{
+			Tx: tx,
+		}
+		txMsgBytes, err := json.Marshal(txMsg)
+		if err != nil {
+			writeJSON(w, map[string]string{"error": "Failed to marshal transaction message: " + err.Error()})
+			return
+		}
 		msg := types.Message{
 			Type: "new_tx",
-			Data: types.TxMessage{
-				Type: "new_transaction",
-				Tx:   &tx,
-			},
+			Data: json.RawMessage(txMsgBytes),
 		}
 
 		broadcastService.BroadcastMessage(msg)
@@ -417,12 +412,17 @@ func mining(minerAddress string, broadcastService *broadcast.BroadcastService) {
 	blockchain.SaveBlockchain(blockchain.Blockchain)
 	blockchain.SaveMempool(blockchain.Mempool)
 
+	blockMsg := types.BlockMessage{
+		Blocks: []types.Block{newBlock},
+	}
+	blockMsgBytes, err := json.Marshal(blockMsg)
+	if err != nil {
+		log.Println("Failed to marshal block message:", err)
+		return
+	}
 	msg := types.Message{
 		Type: "new_block",
-		Data: types.BlockMessage{
-			Type:   "new_block",
-			Blocks: []types.Block{newBlock},
-		},
+		Data: json.RawMessage(blockMsgBytes),
 	}
 
 	broadcastService.BroadcastMessage(msg)

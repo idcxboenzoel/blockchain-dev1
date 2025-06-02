@@ -175,12 +175,22 @@ func (bs *BroadcastService) processIncomingMessages() {
 		case msg := <-bs.incoming:
 			switch msg.Type {
 			case "new_transaction":
-				if txMsg, ok := msg.Data.(types.TxMessage); ok {
-					bs.handler.HandleTransaction(txMsg.Tx)
+				var txMsg types.TxMessage
+				if err := json.Unmarshal(msg.Data, &txMsg); err == nil {
+					bs.handler.HandleTransaction(&txMsg.Tx)
+				} else {
+					fmt.Printf("Invalid transaction message data: %v\n", err)
 				}
 			case "new_block":
-				if blkMsg, ok := msg.Data.(types.BlockMessage); ok {
-					bs.handler.HandleBlock(blkMsg.Blocks[0])
+				var blkMsg types.BlockMessage
+				if err := json.Unmarshal(msg.Data, &blkMsg); err == nil {
+					if len(blkMsg.Blocks) > 0 {
+						bs.handler.HandleBlock(blkMsg.Blocks[0])
+					} else {
+						fmt.Println("Block message contains no blocks")
+					}
+				} else {
+					fmt.Printf("Invalid block message data: %v\n", err)
 				}
 			case "ping":
 				// ignore

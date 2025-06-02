@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"net"
 	"sync"
 )
@@ -14,18 +15,14 @@ type Node struct {
 }
 
 type BlockMessage struct {
-	Type   string
-	Blocks []Block
+	Blocks []Block `json:"Blocks"`
 }
 
 type TxMessage struct {
-	Type string
-	Tx   *Transaction
+	Tx Transaction `json:"Tx"`
 }
 
 type Message struct {
-	Type string `json:"type"`
-	Data any    `json:"data"`
-	// Data BlockMessage
-	// Add other fields as needed for your protocol
+	Type string          `json:"Type"`
+	Data json.RawMessage `json:"Data"`
 }
