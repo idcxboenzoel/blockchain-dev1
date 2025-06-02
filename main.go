@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 )
 
@@ -47,6 +48,11 @@ func (h *NodeHandler) HandleBlock(block types.Block) {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	err, errDb := blockchain.LoadState(), wallets.InitWalletDB()
 	if err != nil {
 		log.Fatal(err)
