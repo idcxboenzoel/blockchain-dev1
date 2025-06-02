@@ -117,7 +117,7 @@ func (bs *BroadcastService) handleNewConnection(conn net.Conn) {
 func (bs *BroadcastService) readFromPeer(peer *Peer) {
 	defer bs.disconnectPeer(peer)
 
-	decoder := json.NewDecoder(io.LimitReader(peer.conn, maxMessageSize))
+	decoder := json.NewDecoder(peer.conn)
 
 	for {
 		select {
@@ -136,6 +136,9 @@ func (bs *BroadcastService) readFromPeer(peer *Peer) {
 				return
 			}
 
+			// Optional: cek ukuran msg.Data di sini jika diperlukan
+
+			fmt.Printf("Received message from %s: %s\n", peer.address, msg.Type)
 			peer.lastSeen = time.Now()
 			bs.incoming <- msg
 		}
@@ -178,6 +181,7 @@ func (bs *BroadcastService) processIncomingMessages() {
 				var txMsg types.TxMessage
 				if err := json.Unmarshal(msg.Data, &txMsg); err == nil {
 					bs.handler.HandleTransaction(&txMsg.Tx)
+					fmt.Printf("Processing message type: %s\n", msg.Type)
 				} else {
 					fmt.Printf("Invalid transaction message data: %v\n", err)
 				}
@@ -186,6 +190,7 @@ func (bs *BroadcastService) processIncomingMessages() {
 				if err := json.Unmarshal(msg.Data, &blkMsg); err == nil {
 					if len(blkMsg.Blocks) > 0 {
 						bs.handler.HandleBlock(blkMsg.Blocks[0])
+						fmt.Printf("Processing message type: %s\n", msg.Type)
 					} else {
 						fmt.Println("Block message contains no blocks")
 					}

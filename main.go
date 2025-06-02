@@ -223,7 +223,7 @@ func HandleAddTx(w http.ResponseWriter, r *http.Request, broadcastService *broad
 			return
 		}
 		msg := types.Message{
-			Type: "new_tx",
+			Type: "new_transaction",
 			Data: json.RawMessage(txMsgBytes),
 		}
 
@@ -420,6 +420,7 @@ func mining(minerAddress string, broadcastService *broadcast.BroadcastService) {
 		log.Println("Failed to marshal block message:", err)
 		return
 	}
+
 	msg := types.Message{
 		Type: "new_block",
 		Data: json.RawMessage(blockMsgBytes),
