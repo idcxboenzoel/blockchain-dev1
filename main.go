@@ -85,7 +85,7 @@ func main() {
 		AllowCredentials: true,
 	}).Handler(mux)
 
-	port := "9292"
+	port := "8282"
 
 	server := &http.Server{
 		Addr:         listenAddr + ":" + port,
@@ -110,7 +110,7 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 	handler := &NodeHandler{}
 	bs := broadcast.NewBroadcastService(handler)
 
-	port := "9999"
+	port := "8888"
 	go func() {
 		if err := bs.Start(port); err != nil {
 			fmt.Printf("Broadcast service error: %v\n", err)
