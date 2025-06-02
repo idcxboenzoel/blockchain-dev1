@@ -128,7 +128,7 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 			fmt.Printf("Broadcast service error: %v\n", err)
 		}
 	}()
-
+	bs.ConnectToAllPeers()
 	fmt.Printf("Broadcast service started on port %s\n", port)
 	return bs, nil
 }

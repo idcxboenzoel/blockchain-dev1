@@ -39,14 +39,23 @@ type BroadcastService struct {
 	wg        sync.WaitGroup
 	shutdown  chan struct{}
 	handler   Handler
+	peerStore *PeerStore
 }
 
 func NewBroadcastService(handler Handler) *BroadcastService {
 	return &BroadcastService{
-		handler:  handler,
-		peers:    make(map[string]*Peer),
-		incoming: make(chan types.Message, 100),
-		shutdown: make(chan struct{}),
+		handler:   handler,
+		peers:     make(map[string]*Peer),
+		incoming:  make(chan types.Message, 100),
+		shutdown:  make(chan struct{}),
+		peerStore: NewPeerStore("peers.json"),
+	}
+}
+
+func (bs *BroadcastService) ConnectToAllPeers() {
+	addresses := bs.peerStore.List()
+	for _, addr := range addresses {
+		go bs.ConnectToPeer(addr)
 	}
 }
 
@@ -197,13 +206,31 @@ func (bs *BroadcastService) processIncomingMessages() {
 				} else {
 					fmt.Printf("Invalid block message data: %v\n", err)
 				}
+			case "getaddr":
+				addrMsg := types.AddrMessage{Addresses: bs.peerStore.List()}
+				data, _ := json.Marshal(addrMsg)
+				response := types.Message{Type: "addr", Data: data}
+				bs.BroadcastMessage(response)
+
+			case "addr":
+				var msgList types.AddrMessage
+				if err := json.Unmarshal(msg.Data, &msgList); err == nil {
+					for _, addr := range msgList.Addresses {
+						if addr != "" {
+							bs.peerStore.Add(addr)
+						}
+					}
+				}
 			case "ping":
 				// ignore
 			default:
 				fmt.Printf("Unknown message type: %s\n", msg.Type)
 			}
+
+			bs.BroadcastMessage(msg)
 		}
 	}
+
 }
 
 func (bs *BroadcastService) monitorPeerHealth() {
@@ -254,12 +281,15 @@ func (bs *BroadcastService) BroadcastMessage(msg types.Message) error {
 		}(peer)
 	}
 
+	fmt.Printf("Broadcasting to %d peers\n", len(bs.peers))
+
 	wg.Wait()
 	return firstError
 }
 
 func (bs *BroadcastService) sendMessageToPeer(peer *Peer, msg types.Message) error {
 	peer.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	fmt.Printf("Sending message to %s\n", peer.address)
 	return json.NewEncoder(peer.conn).Encode(msg)
 }
 
@@ -286,8 +316,21 @@ func (bs *BroadcastService) Stop() {
 // ConnectToPeer connects to a peer at the given address.
 // You should implement the actual connection logic as needed.
 func (bs *BroadcastService) ConnectToPeer(address string) error {
-	// TODO: Implement peer connection logic
-	// For now, just log and return nil to avoid compile error
-	log.Printf("Pretending to connect to peer at %s", address)
+	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
+	if err != nil {
+		log.Printf("Failed to connect to %s: %v", address, err)
+		return err
+	}
+
+	bs.wg.Add(1)
+	go bs.handleNewConnection(conn)
+
+	// Tambahkan ke peerStore
+	bs.peerStore.Add(address)
+
+	// Kirim getaddr
+	msg := types.Message{Type: "getaddr"}
+	_ = json.NewEncoder(conn).Encode(msg)
+
 	return nil
 }
