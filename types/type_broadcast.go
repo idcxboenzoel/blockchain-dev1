@@ -26,3 +26,7 @@ type Message struct {
 	Type string          `json:"Type"`
 	Data json.RawMessage `json:"Data"`
 }
+
+type AddrMessage struct {
+	Addresses []string `json:"addresses"`
+}
