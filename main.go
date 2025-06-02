@@ -2,6 +2,7 @@ package main
 
 import (
 	"blockchain-dev1/blockchain"
+	"blockchain-dev1/broadcast"
 	"blockchain-dev1/market"
 	"blockchain-dev1/transaction"
 	"blockchain-dev1/types"
@@ -21,7 +22,7 @@ import (
 const (
 	apiKeyHeader   = "X-API-Key"
 	requiredAPIKey = "your-secure-api-key" // Change to your secret key, store safely
-	listenAddr     = "0.0.0.0:8443"
+	listenAddr     = "0.0.0.0"
 	certFile       = "server.crt" // TLS certificate
 	keyFile        = "server.key" // TLS private key
 )
@@ -66,14 +67,47 @@ func main() {
 		AllowCredentials: true,
 	}).Handler(mux)
 
+	port := "8181"
+	// port_bc := ""
+	// port := ""
+	// Menggunakan flag package (cara paling idiomatic)
+	// switch os.Args[1] {
+	// case "start":
+	// 	startCmd := flag.NewFlagSet("start", flag.ExitOnError)
+	// 	ports := startCmd.String("port", ports, "Port to listen on")
+	// 	startCmd.Parse(os.Args[2:])
+
+	// 	portsSlice := strings.Split(*ports, ",")
+	// 	if len(portsSlice) < 2 {
+	// 		fmt.Println("Usage: blockchain-dev1 start --port <port1,port2>")
+	// 		os.Exit(1)
+	// 	}
+	// 	port_bc = portsSlice[0] // Broadcast port
+	// 	port = portsSlice[1]    // Main server port
+	// 	if port_bc == "" || port == "" {
+	// 		fmt.Println("Usage: blockchain-dev1 start --port <port_bc,port>")
+	// 		os.Exit(1)
+	// 	}
+	// 	fmt.Printf("Starting server on port broadcast %d \n", port_bc)
+	// 	fmt.Printf("Starting server on port %d \n", port)
+	// default:
+	// 	fmt.Println("Unknown command:", os.Args[1])
+	// 	os.Exit(1)
+	// }
+
+	// Start the server
+	go broadcast.StartBroadcastServer("8080")
+
+	// Connect to other peers
+	broadcast.ConnectToPeer("http://202.74.74.126:8080")
+
 	server := &http.Server{
-		Addr:         listenAddr,
+		Addr:         listenAddr + ":" + port,
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 20 * time.Second,
 	}
-
-	log.Printf("Starting blockchain server on http://%s\n", listenAddr)
+	log.Printf("Starting blockchain server on http://%s\n", listenAddr+":"+port)
 	err = server.ListenAndServe()
 	if err != nil {
 		log.Fatal("Server failed:", err)
@@ -176,6 +210,7 @@ func HandleAddTx(w http.ResponseWriter, r *http.Request) {
 	if transaction.VerifyTransaction(&tx) {
 		blockchain.Mempool = append(blockchain.Mempool, tx)
 		blockchain.SaveMempool(blockchain.Mempool)
+		broadcast.BroadcastNewTransaction(tx)
 		writeJSON(w, map[string]string{"status": "Transaction added to mempool"})
 	} else {
 		writeJSON(w, map[string]string{"error": "Invalid transaction signature"})
@@ -448,6 +483,8 @@ func mining(minerAddress string) {
 
 	blockchain.SaveBlockchain(blockchain.Blockchain)
 	blockchain.SaveMempool(blockchain.Mempool)
+
+	broadcast.BroadcastNewBlock(newBlock)
 	log.Printf("Mined block #%d with reward %.8f\n", newBlock.Index, coinbaseAmount)
 }
 

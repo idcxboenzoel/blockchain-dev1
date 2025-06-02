@@ -33,6 +33,19 @@ func InitBlockchain() []types.Block {
 	return Blockchain
 }
 
+// IsValidBlock checks if a new block is valid based on the previous block.
+func IsValidBlock(newBlock, prevBlock types.Block) bool {
+	// Example validation: index and previous hash check
+	if newBlock.Index != prevBlock.Index+1 {
+		return false
+	}
+	if newBlock.PrevHash != prevBlock.Hash {
+		return false
+	}
+	// Add more validation as needed (e.g., hash, proof-of-work, etc.)
+	return true
+}
+
 func CalculateHash(block types.Block) string {
 	record := strconv.Itoa(block.Index) + block.Timestamp + block.PrevHash + strconv.Itoa(block.Nonce)
 	for _, tx := range block.Transactions {
