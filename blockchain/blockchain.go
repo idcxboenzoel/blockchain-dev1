@@ -266,3 +266,54 @@ func miningQuiz() bool {
 	fmt.Println("Correct! Mining will proceed.")
 	return true
 }
+
+func AddTransactionToMempool(tx types.Transaction) {
+	// Check if transaction already exists in mempool
+	for _, existingTx := range Mempool {
+		if existingTx.ID == tx.ID {
+			fmt.Println("Transaction already exists in mempool:", tx.ID)
+			return
+		}
+	}
+
+	// Add transaction to mempool
+	Mempool = append(Mempool, tx)
+	fmt.Println("Transaction added to mempool:", tx.ID)
+
+	// Save updated mempool to file
+	err := SaveMempool(Mempool)
+	if err != nil {
+		fmt.Println("Error saving mempool:", err)
+	}
+}
+
+func AddBlockIfValid(newBlock types.Block) bool {
+	if len(Blockchain) == 0 {
+		fmt.Println("Blockchain is empty, adding genesis block")
+		newBlock.Index = 0
+		newBlock.PrevHash = ""
+		newBlock.Hash = CalculateHash(newBlock)
+		Blockchain = append(Blockchain, newBlock)
+		return true
+	}
+
+	prevBlock := Blockchain[len(Blockchain)-1]
+	if !IsValidBlock(newBlock, prevBlock) {
+		fmt.Println("Invalid block:", newBlock.Index)
+		return false
+	}
+
+	newBlock.Index = prevBlock.Index + 1
+	newBlock.PrevHash = prevBlock.Hash
+	newBlock.Hash = CalculateHash(newBlock)
+
+	Blockchain = append(Blockchain, newBlock)
+	err := SaveBlockchain(Blockchain)
+	if err != nil {
+		fmt.Println("Error saving blockchain:", err)
+		return false
+	}
+
+	fmt.Println("New block added:", newBlock.Index)
+	return true
+}

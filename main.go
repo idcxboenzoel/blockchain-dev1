@@ -13,7 +13,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/rs/cors"
@@ -32,6 +34,19 @@ var (
 )
 
 const difficulty = 4 // Number of leading zeros required
+
+// NodeHandler implements the broadcast.Handler interface
+type NodeHandler struct{}
+
+func (h *NodeHandler) HandleTransaction(tx *types.Transaction) {
+	fmt.Println("Received transaction:", tx)
+	// You can add validation or processing logic here
+}
+
+func (h *NodeHandler) HandleBlock(block types.Block) {
+	fmt.Println("Received block:", block)
+	// You can add validation or processing logic here
+}
 
 func main() {
 	err, errDb := blockchain.LoadState(), wallets.InitWalletDB()
@@ -54,7 +69,12 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	routes(mux)
+	bs, err := initBroadcast()
+	if err != nil {
+		log.Fatal("Failed to initialize broadcast service:", err)
+	}
+	// Register API routes with middleware for API key authentication
+	routes(mux, bs)
 	// market
 	market.MarketHandler(mux)
 
@@ -68,38 +88,6 @@ func main() {
 	}).Handler(mux)
 
 	port := "8181"
-	// port_bc := ""
-	// port := ""
-	// Menggunakan flag package (cara paling idiomatic)
-	// switch os.Args[1] {
-	// case "start":
-	// 	startCmd := flag.NewFlagSet("start", flag.ExitOnError)
-	// 	ports := startCmd.String("port", ports, "Port to listen on")
-	// 	startCmd.Parse(os.Args[2:])
-
-	// 	portsSlice := strings.Split(*ports, ",")
-	// 	if len(portsSlice) < 2 {
-	// 		fmt.Println("Usage: blockchain-dev1 start --port <port1,port2>")
-	// 		os.Exit(1)
-	// 	}
-	// 	port_bc = portsSlice[0] // Broadcast port
-	// 	port = portsSlice[1]    // Main server port
-	// 	if port_bc == "" || port == "" {
-	// 		fmt.Println("Usage: blockchain-dev1 start --port <port_bc,port>")
-	// 		os.Exit(1)
-	// 	}
-	// 	fmt.Printf("Starting server on port broadcast %d \n", port_bc)
-	// 	fmt.Printf("Starting server on port %d \n", port)
-	// default:
-	// 	fmt.Println("Unknown command:", os.Args[1])
-	// 	os.Exit(1)
-	// }
-
-	// Start the server
-	go broadcast.StartBroadcastServer("8080")
-
-	// Connect to other peers
-	broadcast.ConnectToPeer("http://202.74.74.126:8080")
 
 	server := &http.Server{
 		Addr:         listenAddr + ":" + port,
@@ -120,19 +108,44 @@ func main() {
 	// }
 }
 
+func initBroadcast() (*broadcast.BroadcastService, error) {
+	// Initialize broadcast service
+	handler := &NodeHandler{}
+	bs := broadcast.NewBroadcastService(handler)
+
+	port := "9191"
+	if err := bs.Start(port); err != nil {
+		fmt.Printf("Failed to start broadcast service: %v\n", err)
+		return nil, err
+	}
+	fmt.Printf("Node running on port %s\n", port)
+
+	// Wait for termination signal (Ctrl+C or SIGTERM)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	<-stop
+
+	fmt.Println("\nShutting down...")
+	bs.Stop()
+	fmt.Println("Node stopped.")
+	//
+
+	return bs, nil
+}
+
 // Middleware to check API key in header for every request
-func ApiKeyAuth(next http.HandlerFunc) http.HandlerFunc {
+func ApiKeyAuth(next func(http.ResponseWriter, *http.Request, *broadcast.BroadcastService), broadcastService *broadcast.BroadcastService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key := r.Header.Get(apiKeyHeader)
 		if key != requiredAPIKey {
 			http.Error(w, "Forbidden: invalid API key", http.StatusForbidden)
 			return
 		}
-		next(w, r)
+		next(w, r, broadcastService)
 	}
 }
 
-func HandleCreateWallet(w http.ResponseWriter, r *http.Request) {
+func HandleCreateWallet(w http.ResponseWriter, r *http.Request, broadcastService *broadcast.BroadcastService) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
 		return
@@ -149,7 +162,7 @@ func HandleCreateWallet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, resp)
 }
 
-func HandleAddTx(w http.ResponseWriter, r *http.Request) {
+func HandleAddTx(w http.ResponseWriter, r *http.Request, broadcastService *broadcast.BroadcastService) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
 		return
@@ -210,7 +223,17 @@ func HandleAddTx(w http.ResponseWriter, r *http.Request) {
 	if transaction.VerifyTransaction(&tx) {
 		blockchain.Mempool = append(blockchain.Mempool, tx)
 		blockchain.SaveMempool(blockchain.Mempool)
-		broadcast.BroadcastNewTransaction(tx)
+
+		msg := types.Message{
+			Type: "new_tx",
+			Data: types.TxMessage{
+				Type: "new_transaction",
+				Tx:   &tx,
+			},
+		}
+
+		broadcastService.BroadcastMessage(msg)
+
 		writeJSON(w, map[string]string{"status": "Transaction added to mempool"})
 	} else {
 		writeJSON(w, map[string]string{"error": "Invalid transaction signature"})
@@ -218,7 +241,7 @@ func HandleAddTx(w http.ResponseWriter, r *http.Request) {
 }
 
 // Handle mining asynchronously so server is not blocked
-func HandleMineAsync(w http.ResponseWriter, r *http.Request) {
+func HandleMineAsync(w http.ResponseWriter, r *http.Request, broadcastService *broadcast.BroadcastService) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
 		return
@@ -245,104 +268,14 @@ func HandleMineAsync(w http.ResponseWriter, r *http.Request) {
 	miningMu.Lock()
 	go func(miner string) {
 		defer miningMu.Unlock()
-		mining(miner)
+		mining(miner, broadcastService)
+
 	}(req.MinerAddress)
 
 	writeJSON(w, map[string]string{"status": "Mining started asynchronously"})
 }
 
-// func HandleGetBlock(w http.ResponseWriter, r *http.Request) {
-// 	index := r.URL.Query().Get("index")
-// 	if index == "" {
-// 		http.Error(w, "Missing index parameter", http.StatusBadRequest)
-// 		return
-// 	}
-// 	block, err := blockchain.GetBlockByIndex(index)
-// 	if err != nil {
-// 		http.Error(w, "Block not found", http.StatusNotFound)
-// 		return
-// 	}
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(block)
-// }
-
-// func HandleGetBlockByHash(w http.ResponseWriter, r *http.Request) {
-// 	hash := r.URL.Query().Get("hash")
-// 	if hash == "" {
-// 		http.Error(w, "Missing hash parameter", http.StatusBadRequest)
-// 		return
-// 	}
-// 	block, err := blockchain.GetBlockByHash(hash)
-// 	if err != nil {
-// 		http.Error(w, "Block not found", http.StatusNotFound)
-// 		return
-// 	}
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(block)
-// }
-
-// func HandleGetBlocksByAddress(w http.ResponseWriter, r *http.Request) {
-// 	address := r.URL.Query().Get("address")
-// 	if address == "" {
-// 		http.Error(w, "Missing address parameter", http.StatusBadRequest)
-// 		return
-// 	}
-
-// 	blocks := blockchain.GetBlocksByAddress(address)
-// 	if len(blocks) == 0 {
-// 		http.Error(w, "No blocks found for this address", http.StatusNotFound)
-// 		return
-// 	}
-
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(blocks)
-// }
-
-// func HandleGetListBlockByTimestamp(w http.ResponseWriter, r *http.Request) {
-// 	timestamp := r.URL.Query().Get("timestamp")
-// 	if timestamp == "" {
-// 		http.Error(w, "Missing timestamp parameter", http.StatusBadRequest)
-// 		return
-// 	}
-
-// 	blocks, err := blockchain.GetBlocksByTimestamp(timestamp)
-// 	if err != nil {
-// 		http.Error(w, "Error retrieving blocks: "+err.Error(), http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	if len(blocks) == 0 {
-// 		http.Error(w, "No blocks found for this timestamp", http.StatusNotFound)
-// 		return
-// 	}
-
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(blocks)
-// }
-
-// func HandleGetListBlockByDate(w http.ResponseWriter, r *http.Request) {
-// 	date := r.URL.Query().Get("date")
-// 	if date == "" {
-// 		http.Error(w, "Missing date parameter", http.StatusBadRequest)
-// 		return
-// 	}
-
-// 	blocks, err := blockchain.GetBlocksByDate(date)
-// 	if err != nil {
-// 		http.Error(w, "Error retrieving blocks: "+err.Error(), http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	if len(blocks) == 0 {
-// 		http.Error(w, "No blocks found for this date", http.StatusNotFound)
-// 		return
-// 	}
-
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(blocks)
-// }
-
-func HandleGetListAllBlocks(w http.ResponseWriter, r *http.Request) {
+func HandleGetListAllBlocks(w http.ResponseWriter, r *http.Request, broadcastService *broadcast.BroadcastService) {
 	blocks := blockchain.Blockchain
 	if len(blocks) == 0 {
 		http.Error(w, "No blocks found", http.StatusNotFound)
@@ -361,7 +294,7 @@ func HandleGetListAllBlocks(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(ordered)
 }
 
-func HandleGetBlockByIndex(w http.ResponseWriter, r *http.Request) {
+func HandleGetBlockByIndex(w http.ResponseWriter, r *http.Request, broadcastService *broadcast.BroadcastService) {
 	indexStr := r.URL.Query().Get("index")
 	if indexStr == "" {
 		http.Error(w, "Missing index parameter", http.StatusBadRequest)
@@ -383,7 +316,7 @@ func HandleGetBlockByIndex(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(block)
 }
 
-func HandlerGetWallet(w http.ResponseWriter, r *http.Request) {
+func HandlerGetWallet(w http.ResponseWriter, r *http.Request, broadcastService *broadcast.BroadcastService) {
 	address := r.URL.Query().Get("address")
 	if address == "" {
 		http.Error(w, "Missing address parameter", http.StatusBadRequest)
@@ -419,7 +352,7 @@ func HandlerGetWallet(w http.ResponseWriter, r *http.Request) {
 }
 
 // Mining logic moved to function for async use
-func mining(minerAddress string) {
+func mining(minerAddress string, broadcastService *broadcast.BroadcastService) {
 	if len(blockchain.Mempool) == 0 {
 		// log.Println("No transactions to mine")
 		// return
@@ -484,7 +417,16 @@ func mining(minerAddress string) {
 	blockchain.SaveBlockchain(blockchain.Blockchain)
 	blockchain.SaveMempool(blockchain.Mempool)
 
-	broadcast.BroadcastNewBlock(newBlock)
+	msg := types.Message{
+		Type: "new_block",
+		Data: types.BlockMessage{
+			Type:   "new_block",
+			Blocks: []types.Block{newBlock},
+		},
+	}
+
+	broadcastService.BroadcastMessage(msg)
+
 	log.Printf("Mined block #%d with reward %.8f\n", newBlock.Index, coinbaseAmount)
 }
 
@@ -502,7 +444,7 @@ func MineBlock(b *types.Block) {
 	}
 }
 
-func HandleBalance(w http.ResponseWriter, r *http.Request) {
+func HandleBalance(w http.ResponseWriter, r *http.Request, broadcastService *broadcast.BroadcastService) {
 	address := r.URL.Query().Get("address")
 	if address == "" {
 		http.Error(w, "address query parameter required", http.StatusBadRequest)
@@ -516,7 +458,7 @@ func HandleBalance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, resp)
 }
 
-func HandlePrintChain(w http.ResponseWriter, r *http.Request) {
+func HandlePrintChain(w http.ResponseWriter, r *http.Request, broadcastService *broadcast.BroadcastService) {
 	writeJSON(w, blockchain.Blockchain)
 }
 
@@ -525,7 +467,7 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 	json.NewEncoder(w).Encode(v)
 }
 
-func HandlePrintMempool(w http.ResponseWriter, r *http.Request) {
+func HandlePrintMempool(w http.ResponseWriter, r *http.Request, broadcastService *broadcast.BroadcastService) {
 	w.Header().Set("Content-Type", "application/json")
 	if len(blockchain.Mempool) == 0 {
 		w.Write([]byte("[]"))

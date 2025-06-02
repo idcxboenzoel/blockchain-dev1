@@ -22,3 +22,10 @@ type TxMessage struct {
 	Type string
 	Tx   *Transaction
 }
+
+type Message struct {
+	Type string `json:"type"`
+	Data any    `json:"data"`
+	// Data BlockMessage
+	// Add other fields as needed for your protocol
+}
