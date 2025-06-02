@@ -223,6 +223,8 @@ func (bs *BroadcastService) processIncomingMessages() {
 				}
 			case "ping":
 				// ignore
+			case "pong":
+				// Update lastSeen peer agar tidak disconnect
 			default:
 				fmt.Printf("Unknown message type: %s\n", msg.Type)
 			}

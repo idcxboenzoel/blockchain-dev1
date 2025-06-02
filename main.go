@@ -127,9 +127,13 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 		if err := bs.Start(port); err != nil {
 			fmt.Printf("Broadcast service error: %v\n", err)
 		}
+		fmt.Printf("Broadcast service started on port %s\n", port)
+
+		bs.ConnectToPeer("localhost:9999") // Connect to self for testing
+		bs.ConnectToPeer("localhost:9292")
 	}()
-	bs.ConnectToAllPeers()
-	fmt.Printf("Broadcast service started on port %s\n", port)
+	// bs.ConnectToAllPeers()
+
 	return bs, nil
 }
 
