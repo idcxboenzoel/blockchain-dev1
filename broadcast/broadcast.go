@@ -57,7 +57,7 @@ func NewBroadcastService(handler Handler) *BroadcastService {
 		peers:     make(map[string]*Peer),
 		incoming:  make(chan incomingMessage, 100),
 		shutdown:  make(chan struct{}),
-		peerStore: NewPeerStore("peers.json"),
+		peerStore: NewPeerStore("data/peers.json"),
 	}
 }
 
@@ -67,11 +67,7 @@ func (bs *BroadcastService) Start(port string) error {
 		return fmt.Errorf("failed to start listener: %w", err)
 	}
 
-	if isFirstRun() {
-		go bs.BootstrapFromPeers()
-		markFirstRunDone()
-	}
-
+	go bs.ConnectToAllPeers()
 	go bs.acceptConnections(listener)
 	go bs.processIncomingMessages()
 	go bs.monitorPeerHealth()
@@ -122,7 +118,7 @@ func (bs *BroadcastService) handleNewConnection(conn net.Conn) {
 	bs.peers[address] = peer
 	bs.peersLock.Unlock()
 
-	log.Printf("New peer connected: %s\n", address)
+	log.Printf("New peer connected: %s (local: %s)\n", address, conn.LocalAddr().String())
 
 	go bs.readFromPeer(peer)
 	go bs.writeToPeer(peer)
@@ -381,10 +377,16 @@ func (bs *BroadcastService) ConnectToPeer(address string) error {
 }
 
 func (bs *BroadcastService) ConnectToAllPeers() error {
+	print("connection to peers... ")
+	fmt.Println()
+
 	peers := bs.peerStore.List()
 	if len(peers) == 0 {
 		return fmt.Errorf("no peers to connect to")
 	}
+
+
+	print("..........................\n")
 
 	var firstError error
 	var errLock sync.Mutex
@@ -396,8 +398,16 @@ func (bs *BroadcastService) ConnectToAllPeers() error {
 				firstError = fmt.Errorf("failed to connect to peer %s: %w", address, err)
 			}
 			errLock.Unlock()
+
 		}
 	}
+
+	print("Connected to peers: ")
+	for _, address := range peers {
+		fmt.Printf("%s ", address)
+	}
+	fmt.Println()
+
 
 	return firstError
 }
@@ -415,6 +425,11 @@ func (bs *BroadcastService) BootstrapFromPeers() {
 	bs.peersLock.RLock()
 	defer bs.peersLock.RUnlock()
 
+	if len(bs.peers) == 0 {
+		log.Println("No peers to bootstrap from.")
+		return
+	}
+
 	log.Println("Bootstrapping from peers...")
 
 	for _, peer := range bs.peers {
@@ -424,4 +439,15 @@ func (bs *BroadcastService) BootstrapFromPeers() {
 		_ = bs.sendMessageToPeer(peer, getTxs)
 		// break // hanya ambil dari satu peer
 	}
+}
+
+func (bs *BroadcastService) ListPeers() []string {
+	bs.peersLock.RLock()
+	defer bs.peersLock.RUnlock()
+
+	var addresses []string
+	for addr := range bs.peers {
+		addresses = append(addresses, addr)
+	}
+	return addresses
 }

@@ -2,7 +2,6 @@ package broadcast
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"sync"
 )
@@ -42,7 +41,7 @@ func (ps *PeerStore) List() []string {
 func (ps *PeerStore) Load() error {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
-	data, err := ioutil.ReadFile(ps.file)
+	data, err := os.ReadFile(ps.file)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -59,5 +58,38 @@ func (ps *PeerStore) Save() error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(ps.file, data, 0644)
+	return os.WriteFile(ps.file, data, 0644)
+}
+
+func (ps *PeerStore) Remove(address string) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	delete(ps.Peers, address)
+	ps.Save()
+}
+
+func (ps *PeerStore) Clear() {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	ps.Peers = make(map[string]bool)
+	ps.Save()
+}
+
+func (ps *PeerStore) Exists(address string) bool {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	_, exists := ps.Peers[address]
+	return exists
+}
+
+func (ps *PeerStore) Count() int {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	return len(ps.Peers)
+}
+
+func (ps *PeerStore) Close() error {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	return ps.Save()
 }
