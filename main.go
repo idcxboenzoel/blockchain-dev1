@@ -37,6 +37,18 @@ const difficulty = 4 // Number of leading zeros required
 // NodeHandler implements the broadcast.Handler interface
 type NodeHandler struct{}
 
+type BlockchainHandler struct {
+	blocks []types.Block
+	txs    []types.Transaction
+	// ...
+}
+
+func (h *BlockchainHandler) ResetData() {
+	h.blocks = nil
+	h.txs = nil
+	log.Println("Handler data reset.")
+}
+
 func (h *NodeHandler) HandleTransactions(tx []types.Transaction) {
 	for _, t := range tx {
 		blockchain.AddTransactionToMempool(t)
@@ -146,6 +158,17 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 	handler := &NodeHandler{}
 	bs := broadcast.NewBroadcastService(handler)
 
+	if len(os.Args) > 1 && os.Args[1] == "reset" {
+
+		bs := broadcast.NewBroadcastService(handler)
+		err := bs.ResetBlockchainAndResync()
+		if err != nil {
+			log.Fatalf("Reset failed: %v", err)
+		}
+		log.Println("Reset and resync completed.")
+
+	}
+
 	port := os.Getenv("BROADCAST_PORT")
 	if port == "" {
 		port = "9999"
@@ -237,6 +260,12 @@ func HandleAddTx(w http.ResponseWriter, r *http.Request, broadcastService *broad
 		return
 	}
 
+	bf := broadcastService.BootstrapFromPeers()
+	if bf != nil {
+		log.Println("No transactions to add, waiting for peers to sync")
+		return
+	}
+
 	var req struct {
 		From     string  `json:"from"`
 		To       string  `json:"to"`
@@ -303,6 +332,7 @@ func HandleAddTx(w http.ResponseWriter, r *http.Request, broadcastService *broad
 			writeJSON(w, map[string]string{"error": "Failed to marshal transaction message: " + err.Error()})
 			return
 		}
+
 		msg := types.Message{
 			Type: "new_transactions",
 			Data: json.RawMessage(txMsgBytes),
@@ -439,7 +469,11 @@ func mining(minerAddress string, broadcastService *broadcast.BroadcastService) {
 		// return
 	}
 
-	broadcastService.BootstrapFromPeers()
+	bf := broadcastService.BootstrapFromPeers()
+	if bf != nil {
+		log.Println("No transactions to mine, waiting for peers to sync")
+		return
+	}
 
 	validTxs := []types.Transaction{}
 	for _, tx := range blockchain.Mempool {

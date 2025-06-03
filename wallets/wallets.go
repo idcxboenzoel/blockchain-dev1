@@ -159,8 +159,8 @@ func LoadWalletFromDB(address string, mnemonic string) (*ecdsa.PrivateKey, error
 
 	secretKey := utils.GenerateSecretKeyFromMnemonic(mnemonic)
 
-	fmt.Printf("Private key base64 from DB: %q\n", cleanB64)
-	fmt.Printf("Secret key: %x\n", secretKey)
+	// fmt.Printf("Private key base64 from DB: %q\n", cleanB64)
+	// fmt.Printf("Secret key: %x\n", secretKey)
 
 	decoded, err := base64.StdEncoding.DecodeString(cleanB64)
 	if err != nil {

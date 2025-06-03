@@ -188,7 +188,7 @@ func (bs *BroadcastService) processIncomingMessages() {
 		case <-bs.shutdown:
 			return
 		case in := <-bs.incoming:
-			fmt.Printf("Received message from %s: Type=%s, Data=%s\n", in.Peer.address, in.Msg.Type, string(in.Msg.Data))
+			// fmt.Printf("Received message from %s: Type=%s, Data=%s\n", in.Peer.address, in.Msg.Type, string(in.Msg.Data))
 			switch in.Msg.Type {
 			case "new_blocks":
 				var msg types.AllBlocksMessage
@@ -426,7 +426,7 @@ func markFirstRunDone() {
 	_ = os.WriteFile("first_run.flag", []byte("done"), 0644)
 }
 
-func (bs *BroadcastService) BootstrapFromPeers() {
+func (bs *BroadcastService) BootstrapFromPeers() error {
 	bs.peersLock.RLock()
 	defer bs.peersLock.RUnlock()
 
@@ -434,7 +434,8 @@ func (bs *BroadcastService) BootstrapFromPeers() {
 
 	if len(bs.peers) == 0 {
 		log.Println("No peers to bootstrap from.")
-		return
+		bs.ConnectToAllPeers()
+		return errors.New("no peers connected")
 	}
 
 	log.Println("Bootstrapping from peers...")
@@ -446,6 +447,8 @@ func (bs *BroadcastService) BootstrapFromPeers() {
 		_ = bs.sendMessageToPeer(peer, getTxs)
 		// break // hanya ambil dari satu peer
 	}
+
+	return nil
 }
 
 func (bs *BroadcastService) ListPeers() []string {
@@ -457,4 +460,45 @@ func (bs *BroadcastService) ListPeers() []string {
 		addresses = append(addresses, addr)
 	}
 	return addresses
+}
+
+func (bs *BroadcastService) ResetBlockchainAndResync() error {
+	// 1. Hapus file blockchain jika ada
+	if err := os.Remove("blockchain.json"); err != nil && !os.IsNotExist(err) {
+		log.Printf("Error deleting blockchain.json: %v", err)
+		return err
+	}
+	log.Println("Local blockchain cache cleared.")
+
+	// 2. (Opsional) Clear in-memory data (handler reset)
+	if resettable, ok := bs.handler.(interface {
+		ResetData()
+	}); ok {
+		resettable.ResetData()
+	}
+
+	// 3. Re-request data dari semua peer
+	bs.peersLock.RLock()
+	defer bs.peersLock.RUnlock()
+
+	if len(bs.peers) == 0 {
+		log.Println("No peers available to resync from.")
+		return errors.New("no peers connected")
+	}
+
+	msgs := []types.Message{
+		{Type: "get_blocks"},
+		{Type: "get_transactions"},
+	}
+
+	for _, p := range bs.peers {
+		for _, msg := range msgs {
+			if err := bs.sendMessageToPeer(p, msg); err != nil {
+				log.Printf("Failed to request %s from %s: %v", msg.Type, p.address, err)
+			}
+		}
+	}
+
+	log.Println("Requested blockchain and transactions from all peers.")
+	return nil
 }
