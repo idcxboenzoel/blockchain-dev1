@@ -220,17 +220,13 @@ func (bs *BroadcastService) processIncomingMessages() {
 			case "all_blocks":
 				var blkMsg types.AllBlocksMessage
 				if err := json.Unmarshal(in.Msg.Data, &blkMsg); err == nil {
-					for _, block := range blkMsg.Blocks {
-						bs.handler.HandleBlock(block)
-					}
+					bs.handler.HandleBlocks(blkMsg.Blocks)
 				}
 
 			case "all_transactions":
 				var txMsg types.AllTransactionsMessage
 				if err := json.Unmarshal(in.Msg.Data, &txMsg); err == nil {
-					for _, tx := range txMsg.Transactions {
-						bs.handler.HandleTransaction(&tx)
-					}
+					bs.handler.HandleTransactions(txMsg.Transactions)
 				}
 			case "getaddr":
 				addrMsg := types.AddrMessage{Addresses: bs.peerStore.List()}
