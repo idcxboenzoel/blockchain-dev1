@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -15,6 +16,8 @@ import (
 type Handler interface {
 	HandleTransaction(tx *types.Transaction)
 	HandleBlock(block types.Block)
+	GetAllBlocks() []types.Block
+	GetAllTransactions() []types.Transaction
 }
 
 const (
@@ -62,6 +65,11 @@ func (bs *BroadcastService) Start(port string) error {
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		return fmt.Errorf("failed to start listener: %w", err)
+	}
+
+	if isFirstRun() {
+		go bs.BootstrapFromPeers()
+		markFirstRunDone()
 	}
 
 	go bs.acceptConnections(listener)
@@ -183,21 +191,51 @@ func (bs *BroadcastService) processIncomingMessages() {
 			return
 		case in := <-bs.incoming:
 			switch in.Msg.Type {
-			case "new_transaction":
-				var txMsg types.TxMessage
-				if err := json.Unmarshal(in.Msg.Data, &txMsg); err == nil {
-					bs.handler.HandleTransaction(&txMsg.Tx)
-				} else {
-					log.Printf("Invalid tx message: %v\n", err)
+			case "new_blocks":
+				var blocks []types.Block
+				if err := json.Unmarshal(in.Msg.Data, &blocks); err != nil {
+					fmt.Println("Invalid blocks data")
+					return
 				}
-			case "new_block":
-				var blkMsg types.BlockMessage
+				for _, block := range blocks {
+					bs.handler.HandleBlock(block)
+				}
+
+			case "new_transactions":
+				var txs []types.Transaction
+				if err := json.Unmarshal(in.Msg.Data, &txs); err != nil {
+					fmt.Println("Invalid transactions data")
+					return
+				}
+				for i := range txs {
+					bs.handler.HandleTransaction(&txs[i])
+				}
+			case "get_blocks":
+				blocks := bs.handler.GetAllBlocks()
+				data, _ := json.Marshal(types.AllBlocksMessage{Blocks: blocks})
+				resp := types.Message{Type: "all_blocks", Data: data}
+				_ = bs.sendMessageToPeer(in.Peer, resp)
+
+			case "get_transactions":
+				txs := bs.handler.GetAllTransactions()
+				data, _ := json.Marshal(types.AllTransactionsMessage{Transactions: txs})
+				resp := types.Message{Type: "all_transactions", Data: data}
+				_ = bs.sendMessageToPeer(in.Peer, resp)
+
+			case "all_blocks":
+				var blkMsg types.AllBlocksMessage
 				if err := json.Unmarshal(in.Msg.Data, &blkMsg); err == nil {
 					for _, block := range blkMsg.Blocks {
 						bs.handler.HandleBlock(block)
 					}
-				} else {
-					log.Printf("Invalid block message: %v\n", err)
+				}
+
+			case "all_transactions":
+				var txMsg types.AllTransactionsMessage
+				if err := json.Unmarshal(in.Msg.Data, &txMsg); err == nil {
+					for _, tx := range txMsg.Transactions {
+						bs.handler.HandleTransaction(&tx)
+					}
 				}
 			case "getaddr":
 				addrMsg := types.AddrMessage{Addresses: bs.peerStore.List()}
@@ -315,4 +353,25 @@ func (bs *BroadcastService) ConnectToPeer(address string) error {
 	_ = json.NewEncoder(conn).Encode(msg)
 
 	return nil
+}
+
+func isFirstRun() bool {
+	_, err := os.Stat("first_run.flag")
+	return os.IsNotExist(err)
+}
+
+func markFirstRunDone() {
+	_ = os.WriteFile("first_run.flag", []byte("done"), 0644)
+}
+
+func (bs *BroadcastService) BootstrapFromPeers() {
+	bs.peersLock.RLock()
+	defer bs.peersLock.RUnlock()
+
+	log.Println("Bootstrapping from peers...")
+
+	for _, peer := range bs.peers {
+		_ = bs.sendMessageToPeer(peer, types.Message{Type: "get_blocks"})
+		_ = bs.sendMessageToPeer(peer, types.Message{Type: "get_transactions"})
+	}
 }

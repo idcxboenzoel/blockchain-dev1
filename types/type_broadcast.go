@@ -30,3 +30,14 @@ type Message struct {
 type AddrMessage struct {
 	Addresses []string `json:"addresses"`
 }
+
+type GetBlocksMessage struct{}
+type GetTransactionsMessage struct{}
+
+type AllBlocksMessage struct {
+	Blocks []Block `json:"blocks"`
+}
+
+type AllTransactionsMessage struct {
+	Transactions []Transaction `json:"transactions"`
+}

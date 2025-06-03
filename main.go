@@ -38,28 +38,27 @@ const difficulty = 4 // Number of leading zeros required
 type NodeHandler struct{}
 
 func (h *NodeHandler) HandleTransaction(tx *types.Transaction) {
-	fmt.Println("Received transaction:", tx)
-	// You can add validation or processing logic here
-	blockchain.Mempool = append(blockchain.Mempool, *tx)
-	blockchain.SaveMempool(blockchain.Mempool)
+	blockchain.AddTransactionToMempool(*tx)
 }
 
 func (h *NodeHandler) HandleBlock(block types.Block) {
-	fmt.Println("Received block:", block)
-	// You can add validation or processing logic here
-	blockchain.Blockchain = append(blockchain.Blockchain, block)
-	blockchain.SaveBlockchain(blockchain.Blockchain)
-	if !utils.ChainIsValid(blockchain.Blockchain) {
-		log.Println("Received invalid block, chain is now invalid")
-		return
+	success := blockchain.ReplaceChainIfValid([]types.Block{block})
+	if !success {
+		fmt.Println("Failed to sync chain from peer")
 	}
-	blockchain.SaveMempool(blockchain.Mempool)
-	fmt.Println("Blockchain updated with new block")
-	if len(blockchain.Blockchain) > 0 {
-		fmt.Printf("Current blockchain length: %d\n", len(blockchain.Blockchain))
-	} else {
-		fmt.Println("Blockchain is empty")
-	}
+}
+
+func (h *NodeHandler) GetAllBlocks() []types.Block {
+	blocks := []types.Block{}
+	blocks = append(blocks, blockchain.Blockchain...)
+	return blocks
+}
+
+func (h *NodeHandler) GetAllTransactions() []types.Transaction {
+	txs := []types.Transaction{}
+	txs = append(txs, blockchain.Mempool...)
+	return txs
+
 }
 
 func main() {
@@ -146,6 +145,13 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 
 		bs.ConnectToPeer("localhost:8888") // Connect to self for testing
 		bs.ConnectToPeer("localhost:8282")
+
+		hasBootstrapped := false
+		// Dalam main loop atau setelah semua service jalan:
+		if !hasBootstrapped {
+			bs.BootstrapFromPeers() // Removed: function undefined
+			hasBootstrapped = true
+		}
 	}()
 	// bs.ConnectToAllPeers()
 
