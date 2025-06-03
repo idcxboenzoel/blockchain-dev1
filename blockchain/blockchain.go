@@ -317,3 +317,34 @@ func AddBlockIfValid(newBlock types.Block) bool {
 	fmt.Println("New block added:", newBlock.Index)
 	return true
 }
+
+func ReplaceChainIfValid(newChain []types.Block) bool {
+	if len(newChain) <= len(Blockchain) {
+		fmt.Println("Received chain is not longer than current chain")
+		return false
+	}
+
+	if !IsValidChain(newChain) {
+		fmt.Println("Received chain is invalid")
+		return false
+	}
+
+	Blockchain = newChain
+	err := SaveBlockchain(Blockchain)
+	if err != nil {
+		fmt.Println("Failed to save replaced blockchain:", err)
+		return false
+	}
+
+	fmt.Println("Blockchain replaced with new longer valid chain")
+	return true
+}
+
+func IsValidChain(chain []types.Block) bool {
+	for i := 1; i < len(chain); i++ {
+		if !IsValidBlock(chain[i], chain[i-1]) {
+			return false
+		}
+	}
+	return true
+}
