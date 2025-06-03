@@ -18,7 +18,7 @@ type Handler interface {
 }
 
 const (
-	maxMessageSize = 10 * 1024 * 1024 // 10MB
+	maxMessageSize = 10 * 1024 * 1024
 	writeTimeout   = 5 * time.Second
 	readTimeout    = 30 * time.Second
 	peerLimit      = 100
@@ -30,32 +30,31 @@ type Peer struct {
 	lastSeen   time.Time
 	disconnect chan struct{}
 	once       sync.Once
+	sendLock   sync.Mutex
 }
 
 type BroadcastService struct {
 	peers     map[string]*Peer
 	peersLock sync.RWMutex
-	incoming  chan types.Message
+	incoming  chan incomingMessage
 	wg        sync.WaitGroup
 	shutdown  chan struct{}
 	handler   Handler
 	peerStore *PeerStore
 }
 
+type incomingMessage struct {
+	Peer *Peer
+	Msg  types.Message
+}
+
 func NewBroadcastService(handler Handler) *BroadcastService {
 	return &BroadcastService{
 		handler:   handler,
 		peers:     make(map[string]*Peer),
-		incoming:  make(chan types.Message, 100),
+		incoming:  make(chan incomingMessage, 100),
 		shutdown:  make(chan struct{}),
 		peerStore: NewPeerStore("peers.json"),
-	}
-}
-
-func (bs *BroadcastService) ConnectToAllPeers() {
-	addresses := bs.peerStore.List()
-	for _, addr := range addresses {
-		go bs.ConnectToPeer(addr)
 	}
 }
 
@@ -83,7 +82,7 @@ func (bs *BroadcastService) acceptConnections(listener net.Listener) {
 			conn, err := listener.Accept()
 			if err != nil {
 				if !errors.Is(err, net.ErrClosed) {
-					fmt.Printf("Accept error: %v\n", err)
+					log.Printf("Accept error: %v\n", err)
 				}
 				continue
 			}
@@ -97,9 +96,10 @@ func (bs *BroadcastService) acceptConnections(listener net.Listener) {
 func (bs *BroadcastService) handleNewConnection(conn net.Conn) {
 	defer bs.wg.Done()
 
+	address := conn.RemoteAddr().String()
 	peer := &Peer{
 		conn:       conn,
-		address:    conn.RemoteAddr().String(),
+		address:    address,
 		lastSeen:   time.Now(),
 		disconnect: make(chan struct{}),
 	}
@@ -108,13 +108,13 @@ func (bs *BroadcastService) handleNewConnection(conn net.Conn) {
 	if len(bs.peers) >= peerLimit {
 		bs.peersLock.Unlock()
 		conn.Close()
-		fmt.Printf("Rejected peer %s (peer limit reached)\n", peer.address)
+		log.Printf("Rejected peer %s (peer limit reached)\n", address)
 		return
 	}
-	bs.peers[peer.address] = peer
+	bs.peers[address] = peer
 	bs.peersLock.Unlock()
 
-	fmt.Printf("New peer connected: %s -> %s\n", conn.RemoteAddr(), conn.LocalAddr())
+	log.Printf("New peer connected: %s\n", address)
 
 	go bs.readFromPeer(peer)
 	go bs.writeToPeer(peer)
@@ -138,18 +138,15 @@ func (bs *BroadcastService) readFromPeer(peer *Peer) {
 			var msg types.Message
 			if err := decoder.Decode(&msg); err != nil {
 				if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
-					fmt.Printf("Peer %s disconnected\n", peer.address)
+					log.Printf("Peer %s disconnected\n", peer.address)
 				} else {
-					fmt.Printf("Read error from %s: %v\n", peer.address, err)
+					log.Printf("Read error from %s: %v\n", peer.address, err)
 				}
 				return
 			}
 
-			// Optional: cek ukuran msg.Data di sini jika diperlukan
-
-			fmt.Printf("Received message from %s: %s\n", peer.address, msg.Type)
 			peer.lastSeen = time.Now()
-			bs.incoming <- msg
+			bs.incoming <- incomingMessage{Peer: peer, Msg: msg}
 		}
 	}
 }
@@ -165,7 +162,7 @@ func (bs *BroadcastService) writeToPeer(peer *Peer) {
 		case <-ticker.C:
 			ping := types.Message{Type: "ping"}
 			if err := bs.sendMessageToPeer(peer, ping); err != nil {
-				fmt.Printf("Ping failed to %s: %v\n", peer.address, err)
+				log.Printf("Ping failed to %s: %v\n", peer.address, err)
 				bs.disconnectPeer(peer)
 				return
 			}
@@ -184,56 +181,81 @@ func (bs *BroadcastService) processIncomingMessages() {
 		select {
 		case <-bs.shutdown:
 			return
-		case msg := <-bs.incoming:
-			switch msg.Type {
+		case in := <-bs.incoming:
+			switch in.Msg.Type {
 			case "new_transaction":
 				var txMsg types.TxMessage
-				if err := json.Unmarshal(msg.Data, &txMsg); err == nil {
+				if err := json.Unmarshal(in.Msg.Data, &txMsg); err == nil {
 					bs.handler.HandleTransaction(&txMsg.Tx)
-					fmt.Printf("Processing message type: %s\n", msg.Type)
 				} else {
-					fmt.Printf("Invalid transaction message data: %v\n", err)
+					log.Printf("Invalid tx message: %v\n", err)
 				}
 			case "new_block":
 				var blkMsg types.BlockMessage
-				if err := json.Unmarshal(msg.Data, &blkMsg); err == nil {
+				if err := json.Unmarshal(in.Msg.Data, &blkMsg); err == nil {
 					for _, block := range blkMsg.Blocks {
 						bs.handler.HandleBlock(block)
-						fmt.Printf("Processing block in message type: %s\n", msg.Type)
-					}
-					if len(blkMsg.Blocks) == 0 {
-						fmt.Println("Block message contains no blocks")
 					}
 				} else {
-					fmt.Printf("Invalid block message data: %v\n", err)
+					log.Printf("Invalid block message: %v\n", err)
 				}
 			case "getaddr":
 				addrMsg := types.AddrMessage{Addresses: bs.peerStore.List()}
 				data, _ := json.Marshal(addrMsg)
-				response := types.Message{Type: "addr", Data: data}
-				bs.BroadcastMessage(response)
-
+				resp := types.Message{Type: "addr", Data: data}
+				_ = bs.sendMessageToPeer(in.Peer, resp)
 			case "addr":
 				var msgList types.AddrMessage
-				if err := json.Unmarshal(msg.Data, &msgList); err == nil {
+				if err := json.Unmarshal(in.Msg.Data, &msgList); err == nil {
 					for _, addr := range msgList.Addresses {
-						if addr != "" {
+						if addr != "" && addr != in.Peer.address {
 							bs.peerStore.Add(addr)
 						}
 					}
 				}
 			case "ping":
-				// ignore
+				pong := types.Message{Type: "pong"}
+				_ = bs.sendMessageToPeer(in.Peer, pong)
 			case "pong":
-				// Update lastSeen peer agar tidak disconnect
+				in.Peer.lastSeen = time.Now()
 			default:
-				fmt.Printf("Unknown message type: %s\n", msg.Type)
+				log.Printf("Unknown message type: %s\n", in.Msg.Type)
 			}
-
-			// bs.BroadcastMessage(msg)
 		}
 	}
+}
 
+func (bs *BroadcastService) BroadcastMessage(msg types.Message) error {
+	bs.peersLock.RLock()
+	defer bs.peersLock.RUnlock()
+
+	var wg sync.WaitGroup
+	var firstError error
+	var errLock sync.Mutex
+
+	for _, peer := range bs.peers {
+		wg.Add(1)
+		go func(p *Peer) {
+			defer wg.Done()
+			if err := bs.sendMessageToPeer(p, msg); err != nil {
+				errLock.Lock()
+				if firstError == nil {
+					firstError = fmt.Errorf("send to %s failed: %w", p.address, err)
+				}
+				errLock.Unlock()
+			}
+		}(peer)
+	}
+
+	wg.Wait()
+	return firstError
+}
+
+func (bs *BroadcastService) sendMessageToPeer(peer *Peer, msg types.Message) error {
+	peer.sendLock.Lock()
+	defer peer.sendLock.Unlock()
+	peer.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	return json.NewEncoder(peer.conn).Encode(msg)
 }
 
 func (bs *BroadcastService) monitorPeerHealth() {
@@ -245,55 +267,16 @@ func (bs *BroadcastService) monitorPeerHealth() {
 		case <-bs.shutdown:
 			return
 		case <-ticker.C:
-			bs.checkPeerConnections()
-		}
-	}
-}
-
-func (bs *BroadcastService) checkPeerConnections() {
-	bs.peersLock.RLock()
-	defer bs.peersLock.RUnlock()
-
-	for _, peer := range bs.peers {
-		if time.Since(peer.lastSeen) > 2*time.Minute {
-			fmt.Printf("Disconnecting inactive peer: %s\n", peer.address)
-			bs.disconnectPeer(peer)
-		}
-	}
-}
-
-func (bs *BroadcastService) BroadcastMessage(msg types.Message) error {
-	bs.peersLock.RLock()
-	defer bs.peersLock.RUnlock()
-
-	var wg sync.WaitGroup
-	var firstError error
-	var errorLock sync.Mutex
-
-	for _, peer := range bs.peers {
-		wg.Add(1)
-		go func(p *Peer) {
-			defer wg.Done()
-			if err := bs.sendMessageToPeer(p, msg); err != nil {
-				errorLock.Lock()
-				if firstError == nil {
-					firstError = fmt.Errorf("failed to send to %s: %w", p.address, err)
+			bs.peersLock.RLock()
+			for _, peer := range bs.peers {
+				if time.Since(peer.lastSeen) > 2*time.Minute {
+					log.Printf("Disconnecting inactive peer: %s\n", peer.address)
+					bs.disconnectPeer(peer)
 				}
-				errorLock.Unlock()
 			}
-		}(peer)
+			bs.peersLock.RUnlock()
+		}
 	}
-
-	fmt.Printf("Broadcasting to %d peers\n", len(bs.peers))
-
-	wg.Wait()
-	return firstError
-}
-
-func (bs *BroadcastService) sendMessageToPeer(peer *Peer, msg types.Message) error {
-	peer.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
-	fmt.Printf("Sending message to %s\n", peer.address)
-	return json.NewEncoder(peer.conn).Encode(msg)
 }
 
 func (bs *BroadcastService) removePeer(peer *Peer) {
@@ -316,8 +299,6 @@ func (bs *BroadcastService) Stop() {
 	close(bs.incoming)
 }
 
-// ConnectToPeer connects to a peer at the given address.
-// You should implement the actual connection logic as needed.
 func (bs *BroadcastService) ConnectToPeer(address string) error {
 	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
@@ -328,10 +309,8 @@ func (bs *BroadcastService) ConnectToPeer(address string) error {
 	bs.wg.Add(1)
 	go bs.handleNewConnection(conn)
 
-	// Tambahkan ke peerStore
 	bs.peerStore.Add(address)
 
-	// Kirim getaddr
 	msg := types.Message{Type: "getaddr"}
 	_ = json.NewEncoder(conn).Encode(msg)
 
