@@ -27,3 +27,4 @@ go.work.sum
 data/*.json
 
 *.db
+first_run.flag

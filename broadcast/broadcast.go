@@ -292,8 +292,25 @@ func (bs *BroadcastService) BroadcastMessage(msg types.Message) error {
 func (bs *BroadcastService) sendMessageToPeer(peer *Peer, msg types.Message) error {
 	peer.sendLock.Lock()
 	defer peer.sendLock.Unlock()
+
 	peer.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
-	return json.NewEncoder(peer.conn).Encode(msg)
+	err := json.NewEncoder(peer.conn).Encode(msg)
+	if err != nil {
+		log.Printf("Send failed to %s: %v, trying reconnect...\n", peer.address, err)
+
+		// Coba reconnect
+		if reconnectErr := bs.reconnectPeer(peer); reconnectErr != nil {
+			log.Printf("Reconnect to %s failed: %v\n", peer.address, reconnectErr)
+			bs.disconnectPeer(peer)
+			return err
+		}
+
+		// Retry kirim pesan setelah reconnect
+		log.Printf("Reconnected to %s. Retrying message...\n", peer.address)
+		return json.NewEncoder(peer.conn).Encode(msg)
+	}
+
+	return nil
 }
 
 func (bs *BroadcastService) monitorPeerHealth() {
@@ -338,6 +355,13 @@ func (bs *BroadcastService) Stop() {
 }
 
 func (bs *BroadcastService) ConnectToPeer(address string) error {
+	bs.peersLock.RLock()
+	if _, exists := bs.peers[address]; exists {
+		bs.peersLock.RUnlock()
+		return nil // Sudah terkoneksi
+	}
+	bs.peersLock.RUnlock()
+
 	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
 		log.Printf("Failed to connect to %s: %v", address, err)
