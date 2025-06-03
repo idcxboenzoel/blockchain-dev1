@@ -114,7 +114,7 @@ func (bs *BroadcastService) handleNewConnection(conn net.Conn) {
 	bs.peers[peer.address] = peer
 	bs.peersLock.Unlock()
 
-	fmt.Printf("New peer connected: %s\n", peer.address)
+	fmt.Printf("New peer connected: %s -> %s\n", conn.RemoteAddr(), conn.LocalAddr())
 
 	go bs.readFromPeer(peer)
 	go bs.writeToPeer(peer)
@@ -197,10 +197,11 @@ func (bs *BroadcastService) processIncomingMessages() {
 			case "new_block":
 				var blkMsg types.BlockMessage
 				if err := json.Unmarshal(msg.Data, &blkMsg); err == nil {
-					if len(blkMsg.Blocks) > 0 {
-						bs.handler.HandleBlock(blkMsg.Blocks[0])
-						fmt.Printf("Processing message type: %s\n", msg.Type)
-					} else {
+					for _, block := range blkMsg.Blocks {
+						bs.handler.HandleBlock(block)
+						fmt.Printf("Processing block in message type: %s\n", msg.Type)
+					}
+					if len(blkMsg.Blocks) == 0 {
 						fmt.Println("Block message contains no blocks")
 					}
 				} else {
@@ -229,7 +230,7 @@ func (bs *BroadcastService) processIncomingMessages() {
 				fmt.Printf("Unknown message type: %s\n", msg.Type)
 			}
 
-			bs.BroadcastMessage(msg)
+			// bs.BroadcastMessage(msg)
 		}
 	}
 

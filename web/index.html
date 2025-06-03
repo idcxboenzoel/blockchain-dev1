@@ -37,12 +37,34 @@
 </style>
 <body>
     <h1>Simple Go Blockchain</h1>
+    <!-- Add these inside <body> before <div id="output"></div> -->
+
+    <!-- Mining Form -->
+    <div class="mb-3">
+        <h3>Mine a Block</h3>
+        <form id="mineForm" onsubmit="mineBlock(event)">
+            <input type="text" id="minerAddress" class="form-control mb-2" placeholder="Miner Address" required>
+            <button type="submit" class="btn btn-success">Mine Block</button>
+        </form>
+    </div>
+
+    <!-- Transaction Form -->
+    <div class="mb-3">
+        <h3>Send Transaction</h3>
+        <form id="txForm" onsubmit="sendTransaction(event)">
+            <input type="text" id="fromAddress" class="form-control mb-2" placeholder="From Address" required>
+            <input type="text" id="toAddress" class="form-control mb-2" placeholder="To Address" required>
+            <input type="number" id="amount" class="form-control mb-2" placeholder="Amount" step="0.00000001" required>
+            <input type="text" id="mnemonic" class="form-control mb-2" placeholder="Mnemonic" required>
+            <button type="submit" class="btn btn-primary">Send Transaction</button>
+        </form>
+    </div>
     <button onclick="getBlocks()">Get Blocks</button>
     <div id="output"></div>
 
     <script>
         async function getBlocks() {
-            const res = await fetch('https://localhost:8443/blocks', {
+            const res = await fetch('http://localhost:9292/blocks', {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-API-Key': 'your-secure-api-key'
@@ -94,7 +116,7 @@
         }
 
         async function getBlockByIndex(Index) {
-            const res = await fetch(`https://localhost:8443/block/index?index=${Index}`, {
+            const res = await fetch(`https://localhost:9292/block/index?index=${Index}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -165,6 +187,42 @@
 
             document.getElementById("output").innerHTML = table;
         }
+    </script>
+
+
+    <script>
+        async function mineBlock(event) {
+        event.preventDefault();
+        const minerAddress = document.getElementById('minerAddress').value;
+        const res = await fetch('http://localhost:9292/mine', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': 'your-secure-api-key'
+            },
+            body: JSON.stringify({ miner_address: minerAddress })
+        });
+        const result = await res.json();
+        document.getElementById("output").innerText = JSON.stringify(result, null, 2);
+    }
+
+    async function sendTransaction(event) {
+        event.preventDefault();
+        const from = document.getElementById('fromAddress').value;
+        const to = document.getElementById('toAddress').value;
+        const amount = parseFloat(document.getElementById('amount').value);
+        const mnemonic = document.getElementById('mnemonic').value;
+        const res = await fetch('http://localhost:9292/addtx', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': 'your-secure-api-key'
+            },
+            body: JSON.stringify({ from, to, amount, mnemonic })
+        });
+        const result = await res.json();
+        document.getElementById("output").innerText = JSON.stringify(result, null, 2);
+    }
     </script>
 </body>
 </html>
