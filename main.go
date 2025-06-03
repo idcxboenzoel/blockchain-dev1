@@ -260,7 +260,7 @@ func HandleAddTx(w http.ResponseWriter, r *http.Request, broadcastService *broad
 			return
 		}
 		msg := types.Message{
-			Type: "new_transaction",
+			Type: "new_transactions",
 			Data: json.RawMessage(txMsgBytes),
 		}
 
@@ -459,7 +459,7 @@ func mining(minerAddress string, broadcastService *broadcast.BroadcastService) {
 	}
 
 	msg := types.Message{
-		Type: "new_block",
+		Type: "new_blocks",
 		Data: json.RawMessage(blockMsgBytes),
 	}
 
