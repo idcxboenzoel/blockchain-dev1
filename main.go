@@ -55,7 +55,7 @@ func (h *NodeHandler) HandleTransaction(tx *types.Transaction) {
 }
 
 func (h *NodeHandler) HandleBlock(block types.Block) {
-	success := blockchain.ReplaceChainIfValid([]types.Block{block})
+	success := blockchain.HandleNewBlock(block, blockchain.Blockchain)
 	if !success {
 		fmt.Println("Failed to sync chain from peer")
 	}
@@ -344,6 +344,11 @@ func HandleMineAsync(w http.ResponseWriter, r *http.Request, broadcastService *b
 	miningMu.Lock()
 	go func(miner string) {
 		defer miningMu.Unlock()
+
+		// get all block and transaction form all peers before mining
+		log.Println("Starting mining process for miner:", miner)
+
+		broadcastService.BootstrapFromPeers()
 		mining(miner, broadcastService)
 
 	}(req.MinerAddress)

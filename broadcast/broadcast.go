@@ -196,7 +196,20 @@ func (bs *BroadcastService) processIncomingMessages() {
 					fmt.Println("Invalid blocks data:", err)
 					continue
 				}
-				bs.handler.HandleBlocks(msg.Blocks)
+				if len(msg.Blocks) == 0 {
+					fmt.Println("Received empty blocks message")
+					continue
+				}
+				if len(msg.Blocks) > 1 {
+					log.Printf("Received multiple blocks, processing %d blocks\n", len(msg.Blocks))
+					for _, block := range msg.Blocks {
+						log.Printf("Processing block: %s\n", block.Hash)
+						bs.handler.HandleBlock(block)
+					}
+				} else {
+					log.Printf("Received single block: %s\n", msg.Blocks[0].Hash)
+					bs.handler.HandleBlock(msg.Blocks[0])
+				}
 
 			case "new_transactions":
 				var txMsg types.AllTransactionsMessage

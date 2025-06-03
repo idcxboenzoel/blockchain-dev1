@@ -318,6 +318,32 @@ func AddBlockIfValid(newBlock types.Block) bool {
 	return true
 }
 
+// HandleNewBlock tries to add a new block to the chain, or merges if needed.
+// If the new block extends the current chain, it is added.
+// If the new block is part of a longer valid chain, replaces the chain.
+func HandleNewBlock(newBlock types.Block, possibleChain []types.Block) bool {
+	// Case 1: Try to append to current chain
+	if len(possibleChain) == 0 {
+		// No alternative chain provided, just try to add block
+		return AddBlockIfValid(newBlock)
+	}
+
+	// Case 2: possibleChain is a candidate chain (e.g., received from peer)
+	if len(possibleChain) > len(Blockchain) && IsValidChain(possibleChain) {
+		Blockchain = possibleChain
+		err := SaveBlockchain(Blockchain)
+		if err != nil {
+			fmt.Println("Failed to save merged blockchain:", err)
+			return false
+		}
+		fmt.Println("Blockchain replaced with longer valid chain (merge)")
+		return true
+	}
+
+	// Case 3: possibleChain is not longer or not valid, try to add block to current chain
+	return AddBlockIfValid(newBlock)
+}
+
 func ReplaceChainIfValid(newChain []types.Block) bool {
 	if len(newChain) <= len(Blockchain) {
 		fmt.Printf("Received chain is not longer than current chain (received: %d, current: %d)\n", len(newChain), len(Blockchain))
