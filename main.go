@@ -148,9 +148,10 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 		retryCount := 0
 		for {
 			done := make(chan struct{})
-			var beforeLen int
+			var beforeBlockLen, beforeTxLen int
 			if handler != nil {
-				beforeLen = len(handler.GetAllBlocks())
+				beforeBlockLen = len(handler.GetAllBlocks())
+				beforeTxLen = len(handler.GetAllTransactions())
 			}
 			go func() {
 				bs.BootstrapFromPeers()
@@ -164,18 +165,19 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 				fmt.Println("Bootstrap from peers timed out after 1 minute")
 			}
 
-			afterLen := beforeLen
+			afterBlockLen, afterTxLen := beforeBlockLen, beforeTxLen
 			if handler != nil {
-				afterLen = len(handler.GetAllBlocks())
+				afterBlockLen = len(handler.GetAllBlocks())
+				afterTxLen = len(handler.GetAllTransactions())
 			}
-			if afterLen == beforeLen {
+			if afterBlockLen == beforeBlockLen && afterTxLen == beforeTxLen {
 				retryCount++
-				fmt.Printf("No new blocks from peers, sleeping 1 minute before next bootstrap... (retry %d/5)\n", retryCount)
+				fmt.Printf("No new blocks or transactions from peers, sleeping 1 minute before next bootstrap... (retry %d/5)\n", retryCount)
 				if retryCount >= 5 {
 					fmt.Println("No response after 5 retries, stopping bootstrap attempts.")
 					break
 				}
-				time.Sleep(1 * time.Minute)
+				time.Sleep(20 * time.Second)
 			} else {
 				retryCount = 0 // reset on success
 			}
