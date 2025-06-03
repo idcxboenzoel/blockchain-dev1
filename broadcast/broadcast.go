@@ -190,25 +190,26 @@ func (bs *BroadcastService) processIncomingMessages() {
 		case <-bs.shutdown:
 			return
 		case in := <-bs.incoming:
+			fmt.Printf("Received message from %s: Type=%s, Data=%s\n", in.Peer.address, in.Msg.Type, string(in.Msg.Data))
 			switch in.Msg.Type {
 			case "new_blocks":
-				var blocks []types.Block
-				if err := json.Unmarshal(in.Msg.Data, &blocks); err != nil {
-					fmt.Println("Invalid blocks data")
-					return
+				var msg types.AllBlocksMessage
+				if err := json.Unmarshal(in.Msg.Data, &msg); err != nil {
+					fmt.Println("Invalid blocks data:", err)
+					continue
 				}
-				for _, block := range blocks {
+				for _, block := range msg.Blocks {
 					bs.handler.HandleBlock(block)
 				}
 
 			case "new_transactions":
-				var txs []types.Transaction
-				if err := json.Unmarshal(in.Msg.Data, &txs); err != nil {
-					fmt.Println("Invalid transactions data")
-					return
+				var txMsg types.AllTransactionsMessage
+				if err := json.Unmarshal(in.Msg.Data, &txMsg); err != nil {
+					fmt.Println("Invalid transactions data:", err)
+					continue
 				}
-				for i := range txs {
-					bs.handler.HandleTransaction(&txs[i])
+				for i := range txMsg.Transactions {
+					bs.handler.HandleTransaction(&txMsg.Transactions[i])
 				}
 			case "get_blocks":
 				blocks := bs.handler.GetAllBlocks()
@@ -379,6 +380,28 @@ func (bs *BroadcastService) ConnectToPeer(address string) error {
 	return nil
 }
 
+func (bs *BroadcastService) ConnectToAllPeers() error {
+	peers := bs.peerStore.List()
+	if len(peers) == 0 {
+		return fmt.Errorf("no peers to connect to")
+	}
+
+	var firstError error
+	var errLock sync.Mutex
+
+	for _, address := range peers {
+		if err := bs.ConnectToPeer(address); err != nil {
+			errLock.Lock()
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to connect to peer %s: %w", address, err)
+			}
+			errLock.Unlock()
+		}
+	}
+
+	return firstError
+}
+
 func isFirstRun() bool {
 	_, err := os.Stat("first_run.flag")
 	return os.IsNotExist(err)
@@ -395,7 +418,10 @@ func (bs *BroadcastService) BootstrapFromPeers() {
 	log.Println("Bootstrapping from peers...")
 
 	for _, peer := range bs.peers {
-		_ = bs.sendMessageToPeer(peer, types.Message{Type: "get_blocks"})
-		_ = bs.sendMessageToPeer(peer, types.Message{Type: "get_transactions"})
+		getBlocks := types.Message{Type: "get_blocks"}
+		getTxs := types.Message{Type: "get_transactions"}
+		_ = bs.sendMessageToPeer(peer, getBlocks)
+		_ = bs.sendMessageToPeer(peer, getTxs)
+		// break // hanya ambil dari satu peer
 	}
 }

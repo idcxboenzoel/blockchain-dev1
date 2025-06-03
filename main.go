@@ -143,15 +143,12 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 		}
 		fmt.Printf("Broadcast service started on port %s\n", port)
 
-		bs.ConnectToPeer("localhost:8888") // Connect to self for testing
-		bs.ConnectToPeer("localhost:8282")
-
-		hasBootstrapped := false
+		// hasBootstrapped := false
 		// Dalam main loop atau setelah semua service jalan:
-		if !hasBootstrapped {
-			bs.BootstrapFromPeers() // Removed: function undefined
-			hasBootstrapped = true
-		}
+		// if !hasBootstrapped {
+		bs.BootstrapFromPeers() // Removed: function undefined
+		// hasBootstrapped = true
+		// }
 	}()
 	// bs.ConnectToAllPeers()
 

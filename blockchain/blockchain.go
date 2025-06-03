@@ -320,7 +320,7 @@ func AddBlockIfValid(newBlock types.Block) bool {
 
 func ReplaceChainIfValid(newChain []types.Block) bool {
 	if len(newChain) <= len(Blockchain) {
-		fmt.Println("Received chain is not longer than current chain")
+		fmt.Printf("Received chain is not longer than current chain (received: %d, current: %d)\n", len(newChain), len(Blockchain))
 		return false
 	}
 
