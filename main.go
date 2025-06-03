@@ -40,11 +40,26 @@ type NodeHandler struct{}
 func (h *NodeHandler) HandleTransaction(tx *types.Transaction) {
 	fmt.Println("Received transaction:", tx)
 	// You can add validation or processing logic here
+	blockchain.Mempool = append(blockchain.Mempool, *tx)
+	blockchain.SaveMempool(blockchain.Mempool)
 }
 
 func (h *NodeHandler) HandleBlock(block types.Block) {
 	fmt.Println("Received block:", block)
 	// You can add validation or processing logic here
+	blockchain.Blockchain = append(blockchain.Blockchain, block)
+	blockchain.SaveBlockchain(blockchain.Blockchain)
+	if !utils.ChainIsValid(blockchain.Blockchain) {
+		log.Println("Received invalid block, chain is now invalid")
+		return
+	}
+	blockchain.SaveMempool(blockchain.Mempool)
+	fmt.Println("Blockchain updated with new block")
+	if len(blockchain.Blockchain) > 0 {
+		fmt.Printf("Current blockchain length: %d\n", len(blockchain.Blockchain))
+	} else {
+		fmt.Println("Blockchain is empty")
+	}
 }
 
 func main() {
@@ -129,8 +144,8 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 		}
 		fmt.Printf("Broadcast service started on port %s\n", port)
 
-		bs.ConnectToPeer("localhost:9999") // Connect to self for testing
-		bs.ConnectToPeer("localhost:9292")
+		bs.ConnectToPeer("localhost:8888") // Connect to self for testing
+		bs.ConnectToPeer("localhost:8282")
 	}()
 	// bs.ConnectToAllPeers()
 

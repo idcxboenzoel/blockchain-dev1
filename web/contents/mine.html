@@ -1,0 +1,12 @@
+
+<!-- Transaction Form -->
+<div class="mb-3">
+    <h3>Send Transaction</h3>
+    <form id="txForm" onsubmit="sendTransaction(event)">
+        <input type="text" id="fromAddress" class="form-control mb-2" placeholder="From Address" required>
+        <input type="text" id="toAddress" class="form-control mb-2" placeholder="To Address" required>
+        <input type="number" id="amount" class="form-control mb-2" placeholder="Amount" step="0.00000001" required>
+        <input type="text" id="mnemonic" class="form-control mb-2" placeholder="Mnemonic" required>
+        <button type="submit" class="btn btn-primary">Send Transaction</button>
+    </form>
+</div>
