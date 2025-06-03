@@ -347,8 +347,6 @@ func HandleMineAsync(w http.ResponseWriter, r *http.Request, broadcastService *b
 
 		// get all block and transaction form all peers before mining
 		log.Println("Starting mining process for miner:", miner)
-
-		broadcastService.BootstrapFromPeers()
 		mining(miner, broadcastService)
 
 	}(req.MinerAddress)
@@ -440,6 +438,8 @@ func mining(minerAddress string, broadcastService *broadcast.BroadcastService) {
 		// http.Error(w, "miner_address is required", http.StatusBadRequest)
 		// return
 	}
+
+	broadcastService.BootstrapFromPeers()
 
 	validTxs := []types.Transaction{}
 	for _, tx := range blockchain.Mempool {

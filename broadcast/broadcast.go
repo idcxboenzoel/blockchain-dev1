@@ -430,6 +430,8 @@ func (bs *BroadcastService) BootstrapFromPeers() {
 	bs.peersLock.RLock()
 	defer bs.peersLock.RUnlock()
 
+	log.Println("bootstrap from peers...")
+
 	if len(bs.peers) == 0 {
 		log.Println("No peers to bootstrap from.")
 		return
