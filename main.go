@@ -37,6 +37,19 @@ const difficulty = 4 // Number of leading zeros required
 // NodeHandler implements the broadcast.Handler interface
 type NodeHandler struct{}
 
+func (h *NodeHandler) HandleTransactions(tx []types.Transaction) {
+	for _, t := range tx {
+		blockchain.AddTransactionToMempool(t)
+	}
+}
+
+func (h *NodeHandler) HandleBlocks(block []types.Block) {
+	success := blockchain.ReplaceChainIfValid(block)
+	if !success {
+		fmt.Println("Failed to sync chain from peer")
+	}
+}
+
 func (h *NodeHandler) HandleTransaction(tx *types.Transaction) {
 	blockchain.AddTransactionToMempool(*tx)
 }

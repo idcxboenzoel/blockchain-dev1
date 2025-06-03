@@ -14,6 +14,8 @@ import (
 )
 
 type Handler interface {
+	HandleTransactions(tx []types.Transaction)
+	HandleBlocks(block []types.Block)
 	HandleTransaction(tx *types.Transaction)
 	HandleBlock(block types.Block)
 	GetAllBlocks() []types.Block
@@ -194,9 +196,7 @@ func (bs *BroadcastService) processIncomingMessages() {
 					fmt.Println("Invalid blocks data:", err)
 					continue
 				}
-				for _, block := range msg.Blocks {
-					bs.handler.HandleBlock(block)
-				}
+				bs.handler.HandleBlocks(msg.Blocks)
 
 			case "new_transactions":
 				var txMsg types.AllTransactionsMessage
@@ -204,9 +204,7 @@ func (bs *BroadcastService) processIncomingMessages() {
 					fmt.Println("Invalid transactions data:", err)
 					continue
 				}
-				for i := range txMsg.Transactions {
-					bs.handler.HandleTransaction(&txMsg.Transactions[i])
-				}
+				bs.handler.HandleTransactions(txMsg.Transactions)
 			case "get_blocks":
 				blocks := bs.handler.GetAllBlocks()
 				data, _ := json.Marshal(types.AllBlocksMessage{Blocks: blocks})
@@ -385,7 +383,6 @@ func (bs *BroadcastService) ConnectToAllPeers() error {
 		return fmt.Errorf("no peers to connect to")
 	}
 
-
 	print("..........................\n")
 
 	var firstError error
@@ -407,7 +404,6 @@ func (bs *BroadcastService) ConnectToAllPeers() error {
 		fmt.Printf("%s ", address)
 	}
 	fmt.Println()
-
 
 	return firstError
 }
