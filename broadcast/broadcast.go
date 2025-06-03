@@ -57,7 +57,7 @@ func NewBroadcastService(handler Handler) *BroadcastService {
 		peers:     make(map[string]*Peer),
 		incoming:  make(chan incomingMessage, 100),
 		shutdown:  make(chan struct{}),
-		peerStore: NewPeerStore("peers.json"),
+		peerStore: NewPeerStore("data/peers.json"),
 	}
 }
 
@@ -67,11 +67,7 @@ func (bs *BroadcastService) Start(port string) error {
 		return fmt.Errorf("failed to start listener: %w", err)
 	}
 
-	if isFirstRun() {
-		go bs.BootstrapFromPeers()
-		markFirstRunDone()
-	}
-
+	go bs.ConnectToAllPeers()
 	go bs.acceptConnections(listener)
 	go bs.processIncomingMessages()
 	go bs.monitorPeerHealth()
@@ -122,7 +118,7 @@ func (bs *BroadcastService) handleNewConnection(conn net.Conn) {
 	bs.peers[address] = peer
 	bs.peersLock.Unlock()
 
-	log.Printf("New peer connected: %s\n", address)
+	log.Printf("New peer connected: %s (local: %s)\n", address, conn.LocalAddr().String())
 
 	go bs.readFromPeer(peer)
 	go bs.writeToPeer(peer)
@@ -379,6 +375,39 @@ func (bs *BroadcastService) ConnectToPeer(address string) error {
 	return nil
 }
 
+func (bs *BroadcastService) ConnectToAllPeers() error {
+	print("connection to peers... ")
+	fmt.Println()
+
+	peers := bs.peerStore.List()
+	if len(peers) == 0 {
+		return fmt.Errorf("no peers to connect to")
+	}
+
+	print("..........................")
+	var firstError error
+	var errLock sync.Mutex
+
+	for _, address := range peers {
+		if err := bs.ConnectToPeer(address); err != nil {
+			errLock.Lock()
+			if firstError == nil {
+				firstError = fmt.Errorf("failed to connect to peer %s: %w", address, err)
+			}
+			errLock.Unlock()
+
+		}
+	}
+
+	print("Connected to peers: ")
+	for _, address := range peers {
+		fmt.Printf("%s ", address)
+	}
+	fmt.Println()
+
+	return firstError
+}
+
 func isFirstRun() bool {
 	_, err := os.Stat("first_run.flag")
 	return os.IsNotExist(err)
@@ -392,10 +421,29 @@ func (bs *BroadcastService) BootstrapFromPeers() {
 	bs.peersLock.RLock()
 	defer bs.peersLock.RUnlock()
 
+	if len(bs.peers) == 0 {
+		log.Println("No peers to bootstrap from.")
+		return
+	}
+
 	log.Println("Bootstrapping from peers...")
 
 	for _, peer := range bs.peers {
-		_ = bs.sendMessageToPeer(peer, types.Message{Type: "get_blocks"})
-		_ = bs.sendMessageToPeer(peer, types.Message{Type: "get_transactions"})
+		getBlocks := types.Message{Type: "get_blocks"}
+		getTxs := types.Message{Type: "get_transactions"}
+		_ = bs.sendMessageToPeer(peer, getBlocks)
+		_ = bs.sendMessageToPeer(peer, getTxs)
+		// break // hanya ambil dari satu peer
 	}
+}
+
+func (bs *BroadcastService) ListPeers() []string {
+	bs.peersLock.RLock()
+	defer bs.peersLock.RUnlock()
+
+	var addresses []string
+	for addr := range bs.peers {
+		addresses = append(addresses, addr)
+	}
+	return addresses
 }

@@ -143,14 +143,43 @@ func initBroadcast() (*broadcast.BroadcastService, error) {
 		}
 		fmt.Printf("Broadcast service started on port %s\n", port)
 
-		bs.ConnectToPeer("localhost:8888") // Connect to self for testing
-		bs.ConnectToPeer("localhost:8282")
+		// bs.LoadPeers() // Load existing peers from file using exported method
+		// Connect to all known peers
+		retryCount := 0
+		for {
+			done := make(chan struct{})
+			var beforeLen int
+			if handler != nil {
+				beforeLen = len(handler.GetAllBlocks())
+			}
+			go func() {
+				bs.BootstrapFromPeers()
+				close(done)
+			}()
+			select {
+			case <-done:
+				// Bootstrapping finished
+				fmt.Println("Bootstrap from peers completed")
+			case <-time.After(1 * time.Minute):
+				fmt.Println("Bootstrap from peers timed out after 1 minute")
+			}
 
-		hasBootstrapped := false
-		// Dalam main loop atau setelah semua service jalan:
-		if !hasBootstrapped {
-			bs.BootstrapFromPeers() // Removed: function undefined
-			hasBootstrapped = true
+			afterLen := beforeLen
+			if handler != nil {
+				afterLen = len(handler.GetAllBlocks())
+			}
+			if afterLen == beforeLen {
+				retryCount++
+				fmt.Printf("No new blocks from peers, sleeping 1 minute before next bootstrap... (retry %d/5)\n", retryCount)
+				if retryCount >= 5 {
+					fmt.Println("No response after 5 retries, stopping bootstrap attempts.")
+					break
+				}
+				time.Sleep(1 * time.Minute)
+			} else {
+				retryCount = 0 // reset on success
+			}
+			// Loop continues, will bootstrap again unless 5 retries reached
 		}
 	}()
 	// bs.ConnectToAllPeers()
