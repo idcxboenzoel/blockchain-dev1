@@ -186,25 +186,26 @@ func (bs *BroadcastService) processIncomingMessages() {
 		case <-bs.shutdown:
 			return
 		case in := <-bs.incoming:
+			fmt.Printf("Received message from %s: Type=%s, Data=%s\n", in.Peer.address, in.Msg.Type, string(in.Msg.Data))
 			switch in.Msg.Type {
 			case "new_blocks":
-				var blocks []types.Block
-				if err := json.Unmarshal(in.Msg.Data, &blocks); err != nil {
-					fmt.Println("Invalid blocks data")
-					return
+				var msg types.AllBlocksMessage
+				if err := json.Unmarshal(in.Msg.Data, &msg); err != nil {
+					fmt.Println("Invalid blocks data:", err)
+					continue
 				}
-				for _, block := range blocks {
+				for _, block := range msg.Blocks {
 					bs.handler.HandleBlock(block)
 				}
 
 			case "new_transactions":
-				var txs []types.Transaction
-				if err := json.Unmarshal(in.Msg.Data, &txs); err != nil {
-					fmt.Println("Invalid transactions data")
-					return
+				var txMsg types.AllTransactionsMessage
+				if err := json.Unmarshal(in.Msg.Data, &txMsg); err != nil {
+					fmt.Println("Invalid transactions data:", err)
+					continue
 				}
-				for i := range txs {
-					bs.handler.HandleTransaction(&txs[i])
+				for i := range txMsg.Transactions {
+					bs.handler.HandleTransaction(&txMsg.Transactions[i])
 				}
 			case "get_blocks":
 				blocks := bs.handler.GetAllBlocks()
@@ -384,7 +385,9 @@ func (bs *BroadcastService) ConnectToAllPeers() error {
 		return fmt.Errorf("no peers to connect to")
 	}
 
-	print("..........................")
+
+	print("..........................\n")
+
 	var firstError error
 	var errLock sync.Mutex
 
@@ -404,6 +407,7 @@ func (bs *BroadcastService) ConnectToAllPeers() error {
 		fmt.Printf("%s ", address)
 	}
 	fmt.Println()
+
 
 	return firstError
 }
